@@ -146,9 +146,11 @@ export class GardenPresets {
       this.app.mossManager.growGroundMossBeds(pondCenter, 5.0, this.app.terrain, 6);
     }
 
-    // Add swimming Koi Fish
-    const koi = decorationGenerator.createKoiFish(new THREE.Vector3(pondCenter.x, -0.28, pondCenter.z), 3.2);
-    this.app.addPlacedObject(koi, { type: 'decoration', subType: 'koi', scale: 1.0 });
+    // Add swimming Koi Fish pair (Kohaku & companion)
+    const koi1 = decorationGenerator.createKoiFish(new THREE.Vector3(pondCenter.x, -0.28, pondCenter.z), 2.8);
+    const koi2 = decorationGenerator.createKoiFish(new THREE.Vector3(pondCenter.x + 0.4, -0.26, pondCenter.z - 0.4), 3.8);
+    this.app.addPlacedObject(koi1, { type: 'decoration', subType: 'koi', scale: 1.0 });
+    this.app.addPlacedObject(koi2, { type: 'decoration', subType: 'koi', scale: 0.85 });
 
     // Working Shishi-Odoshi bamboo water rocker on pond edge
     const shishi = decorationGenerator.createShishiOdoshi(1.15);

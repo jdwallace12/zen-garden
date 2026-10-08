@@ -659,13 +659,18 @@ class ZenGardenApp {
       if (id === 'lantern') newObj = decorationGenerator.createLantern(scale);
       else if (id === 'shishi') newObj = decorationGenerator.createShishiOdoshi(scale);
       else if (id === 'tsukubai') newObj = decorationGenerator.createTsukubai(scale);
-      else if (id === 'koi') newObj = decorationGenerator.createKoiFish(point.clone(), 3.0 * scale);
+      else if (id === 'koi') {
+        const waterY = Math.min(-0.24, this.terrain.getHeightAt(point.x, point.z) - 0.05);
+        newObj = decorationGenerator.createKoiFish(new THREE.Vector3(point.x, waterY, point.z), 3.0 * scale);
+      }
     }
 
     if (newObj) {
-      const terrainY = this.terrain.getHeightAt(point.x, point.z);
-      newObj.position.set(point.x, terrainY, point.z);
-      newObj.rotation.y = Math.random() * Math.PI * 2;
+      if (id !== 'koi') {
+        const terrainY = this.terrain.getHeightAt(point.x, point.z);
+        newObj.position.set(point.x, terrainY, point.z);
+        newObj.rotation.y = Math.random() * Math.PI * 2;
+      }
       this.addPlacedObject(newObj, { category, id, scale });
 
       // Automatically generate traditional ripple waves around stone
