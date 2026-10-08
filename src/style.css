@@ -527,6 +527,51 @@ input[type="range"]::-webkit-slider-thumb:hover {
   font-weight: 600;
 }
 
+/* Weather & Snow Toggle */
+.weather-toggle-row {
+  margin: 2px 0;
+}
+
+.snow-toggle-btn {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--zen-border);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 0.76rem;
+  color: var(--ink-secondary);
+  transition: var(--transition-smooth);
+}
+
+.snow-toggle-btn:hover {
+  background: #ffffff;
+  border-color: var(--zen-gold);
+  transform: translateY(-1px);
+}
+
+.snow-toggle-btn.active {
+  background: #ffffff;
+  border-color: #5c93c4;
+  color: #2b5d8c;
+  box-shadow: 0 2px 8px rgba(92, 147, 196, 0.2);
+}
+
+.snow-toggle-btn.active .snow-icon {
+  display: inline-block;
+  animation: gentleSnowPulse 3s infinite ease-in-out;
+}
+
+@keyframes gentleSnowPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
 /* Camera Grid */
 .camera-grid {
   display: grid;

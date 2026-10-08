@@ -373,7 +373,21 @@ class ZenGardenApp {
       });
     });
 
-    // 8. Camera Views
+    // 8. Snow Precipitation Toggle
+    const snowToggleBtn = document.getElementById('btn-toggle-snow');
+    const snowStatusText = document.getElementById('snow-status-text');
+    if (snowToggleBtn) {
+      snowToggleBtn.addEventListener('click', () => {
+        const isEnabled = this.weather.toggleSnow();
+        snowToggleBtn.classList.toggle('active', isEnabled);
+        if (snowStatusText) {
+          snowStatusText.textContent = isEnabled ? 'On' : 'Off';
+        }
+        zenAudio.playMossRustle();
+      });
+    }
+
+    // 9. Camera Views
     document.querySelectorAll('.cam-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));

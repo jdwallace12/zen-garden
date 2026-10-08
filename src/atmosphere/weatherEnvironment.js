@@ -135,9 +135,10 @@ export class WeatherEnvironment {
     this.scene.add(this.skyDome);
   }
 
-  // Drifting Sakura / Autumn Maple Petals
+  // Drifting Snowflakes / Soft Winter Snow (Yukimi)
   initParticles() {
-    this.petalCount = 180;
+    this.isSnowEnabled = true;
+    this.petalCount = 200;
     const geo = new THREE.BufferGeometry();
     const positions = new Float32Array(this.petalCount * 3);
     const rotations = new Float32Array(this.petalCount * 3);
@@ -147,7 +148,7 @@ export class WeatherEnvironment {
 
     for (let i = 0; i < this.petalCount; i++) {
       positions[i * 3] = (Math.random() - 0.5) * gardenSpread;
-      positions[i * 3 + 1] = 0.5 + Math.random() * 10;
+      positions[i * 3 + 1] = 0.5 + Math.random() * 11;
       positions[i * 3 + 2] = (Math.random() - 0.5) * gardenSpread;
 
       rotations[i * 3] = Math.random() * Math.PI;
@@ -155,38 +156,55 @@ export class WeatherEnvironment {
       rotations[i * 3 + 2] = Math.random() * Math.PI;
 
       velocities.push({
-        x: 0.6 + Math.random() * 0.8,
-        y: -0.35 - Math.random() * 0.4,
-        z: 0.3 + Math.random() * 0.5,
-        rotSpeed: (Math.random() - 0.5) * 2.0
+        x: 0.35 + Math.random() * 0.45,
+        y: -0.45 - Math.random() * 0.4,
+        z: 0.2 + Math.random() * 0.35,
+        rotSpeed: (Math.random() - 0.5) * 1.5
       });
     }
 
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     this.petalVelocities = velocities;
 
-    // Petal sprite texture (organic curved oval)
+    // Crisp soft white crystalline snowflake texture
     const pCanvas = document.createElement('canvas');
     pCanvas.width = 64;
     pCanvas.height = 64;
     const pCtx = pCanvas.getContext('2d');
-    pCtx.fillStyle = '#fcaec0';
+    const grad = pCtx.createRadialGradient(32, 32, 0, 32, 32, 28);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+    grad.addColorStop(0.4, 'rgba(240, 248, 255, 0.85)');
+    grad.addColorStop(0.8, 'rgba(230, 240, 255, 0.35)');
+    grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    pCtx.fillStyle = grad;
     pCtx.beginPath();
-    pCtx.ellipse(32, 32, 24, 13, Math.PI / 4, 0, Math.PI * 2);
+    pCtx.arc(32, 32, 28, 0, Math.PI * 2);
     pCtx.fill();
 
     const petalTex = new THREE.CanvasTexture(pCanvas);
     const pMat = new THREE.PointsMaterial({
-      size: 0.45,
+      size: 0.48,
       map: petalTex,
       transparent: true,
-      opacity: 0.88,
+      opacity: 0.92,
       depthWrite: false,
       blending: THREE.NormalBlending
     });
 
     this.petalParticles = new THREE.Points(geo, pMat);
     this.scene.add(this.petalParticles);
+  }
+
+  setSnowEnabled(enabled) {
+    this.isSnowEnabled = enabled;
+    if (this.petalParticles) {
+      this.petalParticles.visible = enabled;
+    }
+    return this.isSnowEnabled;
+  }
+
+  toggleSnow() {
+    return this.setSnowEnabled(!this.isSnowEnabled);
   }
 
   // Floating Fireflies (Hotaru) at Dusk and Night
@@ -255,31 +273,33 @@ export class WeatherEnvironment {
   }
 
   update(time, dt) {
-    // 1. Animate Drifting Petals
-    const pPos = this.petalParticles.geometry.attributes.position;
-    const count = this.petalCount;
+    // 1. Animate Drifting Snowflakes
+    if (this.isSnowEnabled && this.petalParticles) {
+      const pPos = this.petalParticles.geometry.attributes.position;
+      const count = this.petalCount;
 
-    for (let i = 0; i < count; i++) {
-      let x = pPos.getX(i);
-      let y = pPos.getY(i);
-      let z = pPos.getZ(i);
+      for (let i = 0; i < count; i++) {
+        let x = pPos.getX(i);
+        let y = pPos.getY(i);
+        let z = pPos.getZ(i);
 
-      const vel = this.petalVelocities[i];
-      // Gentle wind wave
-      x += (vel.x + Math.sin(time + y) * 0.4) * dt;
-      y += vel.y * dt;
-      z += (vel.z + Math.cos(time + x) * 0.3) * dt;
+        const vel = this.petalVelocities[i];
+        // Gentle wind wave
+        x += (vel.x + Math.sin(time + y) * 0.4) * dt;
+        y += vel.y * dt;
+        z += (vel.z + Math.cos(time + x) * 0.3) * dt;
 
-      // Wrap around garden
-      if (y < 0.1 || x > 18 || z > 18) {
-        x = -16 + (Math.random() - 0.5) * 8;
-        y = 5.0 + Math.random() * 6.0;
-        z = -16 + Math.random() * 32;
+        // Wrap around garden
+        if (y < 0.1 || x > 18 || z > 18) {
+          x = -16 + (Math.random() - 0.5) * 8;
+          y = 5.0 + Math.random() * 6.0;
+          z = -16 + Math.random() * 32;
+        }
+
+        pPos.setXYZ(i, x, y, z);
       }
-
-      pPos.setXYZ(i, x, y, z);
+      pPos.needsUpdate = true;
     }
-    pPos.needsUpdate = true;
 
     // 2. Animate Drifting Fireflies (wandering sinusoidal flight)
     if (this.fireflyMat.opacity > 0.05) {
