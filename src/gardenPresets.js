@@ -47,6 +47,11 @@ export class GardenPresets {
         rockObj.rotation.y = Math.random() * Math.PI * 2;
         this.app.addPlacedObject(rockObj, { type: 'rock', subType: stoneType, scale });
       }
+
+      // Grow plush 3D velvet moss bed cushions
+      if (this.app.mossManager) {
+        this.app.mossManager.growGroundMossBeds({ x: c.x, z: c.z }, c.radius * 0.85, this.app.terrain, 4);
+      }
     });
 
     // Parallel oceanic sand waves connecting the garden
@@ -69,6 +74,9 @@ export class GardenPresets {
     const hillCenter = { x: -6, z: -5 };
     this.app.terrain.deformTerrain(hillCenter, 6.5, 0.95);
     this.app.terrain.paintSurface(hillCenter, 5.8, 'moss', 1.0);
+    if (this.app.mossManager) {
+      this.app.mossManager.growGroundMossBeds(hillCenter, 4.5, this.app.terrain, 8);
+    }
 
     // Place heroic Bonsai Pine at top of hill
     const pine = treeGenerator.createTree('pine', 1.35);
@@ -134,6 +142,9 @@ export class GardenPresets {
     const pondCenter = { x: 3.5, z: 1.5 };
     this.app.terrain.carveWaterPool(pondCenter, 6.5, 1.0);
     this.app.terrain.paintSurface(pondCenter, 7.5, 'moss', 0.9);
+    if (this.app.mossManager) {
+      this.app.mossManager.growGroundMossBeds(pondCenter, 5.0, this.app.terrain, 6);
+    }
 
     // Add swimming Koi Fish
     const koi = decorationGenerator.createKoiFish(new THREE.Vector3(pondCenter.x, -0.28, pondCenter.z), 3.2);

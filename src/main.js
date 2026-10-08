@@ -7,6 +7,7 @@ import { treeGenerator } from './procedural/treeGenerator.js';
 import { decorationGenerator } from './procedural/decorations.js';
 import { GardenPresets } from './gardenPresets.js';
 import { zenAudio } from './audio/zenAudio.js';
+import { MossManager } from './procedural/mossManager.js';
 
 class ZenGardenApp {
   constructor() {
@@ -91,6 +92,7 @@ class ZenGardenApp {
 
   initTerrain() {
     this.terrain = new TerrainManager(this.scene, 36, 160);
+    this.mossManager = new MossManager(this.scene);
   }
 
   initWeather() {
@@ -128,7 +130,7 @@ class ZenGardenApp {
     this.scene.add(this.brushCursorGroup);
   }
 
-  updateBrushCursor(point) {
+  updateBrushCursor(point, normal = null) {
     if (!point || this.currentMode === 'delete') {
       this.brushCursorGroup.visible = false;
       return;
@@ -136,7 +138,15 @@ class ZenGardenApp {
     this.brushCursorGroup.visible = true;
     const r = this.terrain.brush.radius;
     this.cursorRing.scale.set(r, 1, r);
-    this.brushCursorGroup.position.set(point.x, point.y + 0.04, point.z);
+    this.brushCursorGroup.position.copy(point);
+
+    if (normal) {
+      this.brushCursorGroup.position.addScaledVector(normal, 0.04);
+      this.brushCursorGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+    } else {
+      this.brushCursorGroup.position.y += 0.04;
+      this.brushCursorGroup.quaternion.identity();
+    }
   }
 
   // Placed Objects Management
@@ -155,6 +165,7 @@ class ZenGardenApp {
     }
     const idx = this.placedObjects.indexOf(current);
     if (idx !== -1) {
+      this.mossManager.removeMossForObject(current);
       this.scene.remove(current);
       this.placedObjects.splice(idx, 1);
       zenAudio.playPlacementThud();
@@ -164,6 +175,9 @@ class ZenGardenApp {
   }
 
   clearPlacedObjects() {
+    if (this.mossManager) {
+      this.mossManager.clearAllMoss();
+    }
     for (const obj of this.placedObjects) {
       this.scene.remove(obj);
     }
@@ -520,13 +534,13 @@ class ZenGardenApp {
         this.isMouseDown = true;
         zenAudio.resume();
 
-        const hit = this.raycastTerrain(e);
+        const hit = this.raycastGarden(e);
         if (hit) {
           if (this.currentMode === 'tool') {
             this.isDraggingTerrain = true;
             this.lastHitPoint = hit.point.clone();
-            this.terrain.applyBrush(hit.point, hit.point, false);
-            zenAudio.setRakeIntensity(0.5);
+            this.applyCurrentTool(hit, false);
+            if (this.terrain.brush.tool === 'rake') zenAudio.setRakeIntensity(0.5);
           } else if (this.currentMode === 'place') {
             this.placeCurrentElement(hit.point);
           } else if (this.currentMode === 'delete') {
@@ -540,16 +554,19 @@ class ZenGardenApp {
       this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
       this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
 
-      const hit = this.raycastTerrain(e);
+      const hit = this.raycastGarden(e);
       if (hit) {
         this.currentHitPoint = hit.point.clone();
-        this.updateBrushCursor(hit.point);
+        const normal = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize() : null;
+        this.updateBrushCursor(hit.point, normal);
 
         if (this.isMouseDown && this.isDraggingTerrain && this.currentMode === 'tool') {
-          const dist = this.lastHitPoint.distanceTo(hit.point);
-          if (dist > 0.05) {
-            this.terrain.applyBrush(hit.point, this.lastHitPoint, true);
-            zenAudio.setRakeIntensity(Math.min(2.5, dist * 12));
+          const dist = this.lastHitPoint ? this.lastHitPoint.distanceTo(hit.point) : 1;
+          if (dist > 0.04) {
+            this.applyCurrentTool(hit, true);
+            if (this.terrain.brush.tool === 'rake') {
+              zenAudio.setRakeIntensity(Math.min(2.5, dist * 12));
+            }
             this.lastHitPoint = hit.point.clone();
           }
         }
@@ -572,11 +589,46 @@ class ZenGardenApp {
     dom.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
-  raycastTerrain(event) {
+  applyCurrentTool(hit, isDragging = false) {
+    const tool = this.terrain.brush.tool;
+    const isRockOrObject = hit.object !== this.terrain.mesh;
+
+    if (tool === 'paint-moss') {
+      if (isRockOrObject) {
+        // Grow moss directly clinging to the rock or lantern surface!
+        this.mossManager.growMossOnRock(hit, this.terrain.brush.radius, 4);
+        zenAudio.playMossRustle();
+      } else {
+        // Paint thick cushion bed on the terrain (elevates physical height & paints texture)
+        this.terrain.paintSurface(hit.point, this.terrain.brush.radius, 'moss', this.terrain.brush.strength);
+        // Grow volumetric 3D cushion moss pillows
+        this.mossManager.growGroundMossBeds(hit.point, this.terrain.brush.radius, this.terrain, 2);
+        zenAudio.playMossRustle();
+      }
+    } else if (tool === 'paint-sand' || tool === 'smooth') {
+      // Restore sand & prune moss from rocks/ground
+      this.terrain.applyBrush(hit.point, this.lastHitPoint || hit.point, isDragging);
+      this.mossManager.pruneMossAt(hit.point, this.terrain.brush.radius);
+    } else {
+      // Other terrain tools (rake, sculpt, etc.) apply to terrain
+      this.terrain.applyBrush(hit.point, this.lastHitPoint || hit.point, isDragging);
+    }
+  }
+
+  raycastGarden(event) {
     this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     this.raycaster.setFromCamera(this.mouse, this.camera);
-    const intersects = this.raycaster.intersectObject(this.terrain.mesh, false);
+
+    const isMoss = this.currentMode === 'tool' && this.terrain.brush.tool === 'paint-moss';
+    const isDelete = this.currentMode === 'delete';
+
+    // When using the moss tool or delete tool, check rocks and placed elements
+    const targets = (isMoss || isDelete)
+      ? [this.terrain.mesh, ...this.placedObjects]
+      : [this.terrain.mesh];
+
+    const intersects = this.raycaster.intersectObjects(targets, true);
     return intersects.length > 0 ? intersects[0] : null;
   }
 

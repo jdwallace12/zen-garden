@@ -493,10 +493,33 @@ export class TerrainManager {
     );
 
     if (type === 'moss') {
+      // Elevate terrain vertices under moss brush to grow thick cushion beds
+      const pos = this.geometry.attributes.position;
+      let modified = false;
+      for (let i = 0; i < pos.count; i++) {
+        const vx = pos.getX(i);
+        const vz = pos.getZ(i);
+        const dist = Math.hypot(vx - center.x, vz - center.z);
+        if (dist < radius) {
+          const falloff = 0.5 * (1 + Math.cos((dist / radius) * Math.PI));
+          const curY = pos.getY(i);
+          // Gently lift up to a plush cushion bed cap (~0.4m)
+          if (curY < 0.42) {
+            pos.setY(i, curY + 0.04 * strength * falloff);
+            modified = true;
+          }
+        }
+      }
+      if (modified) {
+        pos.needsUpdate = true;
+        this.geometry.computeVertexNormals();
+      }
+
       // Lush multi-hue Japanese garden moss (velvet emerald & chartreuse)
       const mossHue = Math.random() > 0.5 ? 'rgba(74, 119, 61, ' : 'rgba(52, 90, 48, ';
-      grad.addColorStop(0, `${mossHue}${Math.min(1, strength * 0.75)})`);
-      grad.addColorStop(0.5, `rgba(88, 128, 68, ${strength * 0.5})`);
+      grad.addColorStop(0, `${mossHue}${Math.min(1, strength * 0.95)})`);
+      grad.addColorStop(0.4, `rgba(82, 126, 62, ${strength * 0.75})`);
+      grad.addColorStop(0.7, `rgba(98, 142, 70, ${strength * 0.5})`);
       grad.addColorStop(1, 'rgba(88, 128, 68, 0)');
 
       this.ctx.fillStyle = grad;
@@ -506,18 +529,70 @@ export class TerrainManager {
 
       // Organic stippling around edges
       this.addOrganicMossSplat(cp.x, cp.y, radiusPx);
+      this.addMossNormals(cp.x, cp.y, radiusPx);
     } else if (type === 'sand' || type === 'smooth-sand') {
-      grad.addColorStop(0, `rgba(235, 225, 206, ${Math.min(1, strength * 0.8)})`);
-      grad.addColorStop(0.7, `rgba(232, 222, 200, ${strength * 0.4})`);
+      // Restore sand - gently lower moss cushions back towards baseline
+      const pos = this.geometry.attributes.position;
+      let modified = false;
+      for (let i = 0; i < pos.count; i++) {
+        const vx = pos.getX(i);
+        const vz = pos.getZ(i);
+        const dist = Math.hypot(vx - center.x, vz - center.z);
+        if (dist < radius) {
+          const falloff = 0.5 * (1 + Math.cos((dist / radius) * Math.PI));
+          const curY = pos.getY(i);
+          if (curY > 0.05) {
+            pos.setY(i, Math.max(0, curY - 0.05 * strength * falloff));
+            modified = true;
+          }
+        }
+      }
+      if (modified) {
+        pos.needsUpdate = true;
+        this.geometry.computeVertexNormals();
+      }
+
+      grad.addColorStop(0, `rgba(235, 225, 206, ${Math.min(1, strength * 0.85)})`);
+      grad.addColorStop(0.7, `rgba(232, 222, 200, ${strength * 0.45})`);
       grad.addColorStop(1, 'rgba(232, 222, 200, 0)');
 
       this.ctx.fillStyle = grad;
       this.ctx.beginPath();
       this.ctx.arc(cp.x, cp.y, radiusPx, 0, Math.PI * 2);
       this.ctx.fill();
+
+      // Clear normal bumps back to flat normal
+      this.normalCtx.save();
+      this.normalCtx.fillStyle = 'rgba(128, 128, 255, 0.4)';
+      this.normalCtx.beginPath();
+      this.normalCtx.arc(cp.x, cp.y, radiusPx, 0, Math.PI * 2);
+      this.normalCtx.fill();
+      this.normalCtx.restore();
+      this.normalTexture.needsUpdate = true;
     }
 
     this.sandTexture.needsUpdate = true;
+  }
+
+  addMossNormals(cx, cy, rPx) {
+    this.normalCtx.save();
+    const count = Math.min(22, Math.floor(rPx * 0.35));
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * rPx;
+      const px = cx + Math.cos(angle) * dist;
+      const py = cy + Math.sin(angle) * dist;
+      const spotR = 3 + Math.random() * 8;
+
+      const nr = 120 + Math.floor(Math.random() * 30);
+      const ng = 120 + Math.floor(Math.random() * 30);
+      this.normalCtx.fillStyle = `rgb(${nr}, ${ng}, 240)`;
+      this.normalCtx.beginPath();
+      this.normalCtx.arc(px, py, spotR, 0, Math.PI * 2);
+      this.normalCtx.fill();
+    }
+    this.normalCtx.restore();
+    this.normalTexture.needsUpdate = true;
   }
 
   addOrganicMossSplat(cx, cy, rPx) {
