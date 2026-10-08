@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Karesansui: 3D Procedural Zen Garden Studio</title>
+    <meta name="description" content="A tranquil 3D procedural Zen garden creation game built with Three.js. Rake sand ripples, carve terrain, paint moss, sculpt ponds, plant bonsai pine, and arrange sacred rocks." />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Noto+Serif+JP:wght@400;600&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script type="module" crossorigin src="./assets/index-B_TO8CHA.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CyTuyhyh.css">
+  </head>
+  <body>
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- UI Overlay -->
+    <div id="ui-layer">
+      <!-- Header Banner -->
+      <header class="zen-header">
+        <div class="logo-group">
+          <div class="enso-symbol" title="Ensō - Circle of Enlightenment">◯</div>
+          <div>
+            <h1 class="zen-title">枯山水 KARESANSUI</h1>
+            <p class="zen-subtitle">Procedural 3D Zen Garden Creation Sanctuary</p>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <button id="btn-meditate" class="zen-btn zen-btn-outline" title="Hide interface for meditation (Press ESC to return)">
+            <span class="btn-icon">🪷</span> Meditate
+          </button>
+          <button id="btn-singing-bowl" class="zen-btn zen-btn-gold" title="Ring Tibetan singing bowl for mindfulness">
+            <span class="btn-icon">🔔</span> Ring Bowl
+          </button>
+          <button id="btn-audio-toggle" class="zen-btn zen-btn-icon" title="Toggle Soundscape">
+            <span id="audio-icon">🔊</span>
+          </button>
+          <button id="btn-snapshot" class="zen-btn zen-btn-primary" title="Capture high-resolution Zen snapshot">
+            <span class="btn-icon">📷</span> Snapshot
+          </button>
+        </div>
+      </header>
+
+      <!-- Left Sidebar: Tools & Actions -->
+      <aside class="zen-sidebar left-sidebar">
+        <!-- Garden Presets -->
+        <div class="panel-section">
+          <h2 class="section-title">Garden Presets <span>庭</span></h2>
+          <div class="preset-grid">
+            <button class="preset-btn active" data-preset="ryoanji" title="Classical 15 stones in 5 moss clusters">
+              <span class="p-jp">竜安寺</span>
+              <span class="p-en">Ryōan-ji Sea</span>
+            </button>
+            <button class="preset-btn" data-preset="sanctuary" title="Sculpted mossy hill with Bonsai Pine & Stone Lantern">
+              <span class="p-jp">蓬莱山</span>
+              <span class="p-en">Sanctuary</span>
+            </button>
+            <button class="preset-btn" data-preset="koi-pond" title="Carved pond with swimming Koi fish & Shishi-odoshi">
+              <span class="p-jp">池泉庭</span>
+              <span class="p-en">Koi Pond</span>
+            </button>
+            <button class="preset-btn" data-preset="procedural" title="Generate procedurally balanced wabi-sabi garden">
+              <span class="p-jp">無為自然</span>
+              <span class="p-en">Randomize</span>
+            </button>
+            <button class="preset-btn" data-preset="blank" title="Clean pristine sand canvas">
+              <span class="p-jp">白砂</span>
+              <span class="p-en">Blank Slate</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Landscape Sculpt & Carve Tools -->
+        <div class="panel-section">
+          <h2 class="section-title">Landscape & Carving <span>刻</span></h2>
+          <div class="tool-grid">
+            <button class="tool-btn active" data-tool="rake" title="Rake straight ripples in sand">
+              <span class="tool-icon">🌾</span>
+              <span class="tool-name">Sand Rake</span>
+            </button>
+            <button class="tool-btn" data-tool="rake-spiral" title="Concentric circular sand waves">
+              <span class="tool-icon">🌀</span>
+              <span class="tool-name">Samon Ripple</span>
+            </button>
+            <button class="tool-btn" data-tool="sculpt-raise" title="Sculpt earth mounds & hills">
+              <span class="tool-icon">⛰️</span>
+              <span class="tool-name">Raise Mound</span>
+            </button>
+            <button class="tool-btn" data-tool="sculpt-lower" title="Carve depressions / dig pond">
+              <span class="tool-icon">⛏️</span>
+              <span class="tool-name">Carve Trench</span>
+            </button>
+            <button class="tool-btn" data-tool="water-pool" title="Carve deep pool filled with reflective water">
+              <span class="tool-icon">💧</span>
+              <span class="tool-name">Carve Pond</span>
+            </button>
+            <button class="tool-btn" data-tool="paint-moss" title="Paint velvety emerald moss">
+              <span class="tool-icon">🍃</span>
+              <span class="tool-name">Paint Moss</span>
+            </button>
+            <button class="tool-btn" data-tool="paint-sand" title="Brush fine cream zen sand">
+              <span class="tool-icon">✨</span>
+              <span class="tool-name">Restore Sand</span>
+            </button>
+            <button class="tool-btn" data-tool="smooth" title="Gently smooth & level terrain">
+              <span class="tool-icon">〰️</span>
+              <span class="tool-name">Smooth</span>
+            </button>
+          </div>
+
+          <!-- Tool Parameters -->
+          <div class="tool-parameters">
+            <div class="param-row">
+              <label for="brush-size">Size: <span id="val-brush-size">2.5m</span></label>
+              <input type="range" id="brush-size" min="1.0" max="6.5" step="0.2" value="2.5" />
+            </div>
+            <div class="param-row" id="prongs-row">
+              <label for="brush-prongs">Rake Prongs: <span id="val-brush-prongs">5</span></label>
+              <input type="range" id="brush-prongs" min="2" max="8" step="1" value="5" />
+            </div>
+            <div class="param-row">
+              <label for="brush-strength">Intensity: <span id="val-brush-strength">50%</span></label>
+              <input type="range" id="brush-strength" min="0.1" max="1.0" step="0.05" value="0.5" />
+            </div>
+          </div>
+        </div>
+
+        <!-- History Actions -->
+        <div class="history-controls">
+          <button id="btn-undo" class="zen-btn-sm" title="Undo (Ctrl+Z)">↺ Undo</button>
+          <button id="btn-redo" class="zen-btn-sm" title="Redo (Ctrl+Y)">↻ Redo</button>
+          <button id="btn-clear-sand" class="zen-btn-sm text-danger" title="Smooth all sand">Rake Smooth</button>
+        </div>
+      </aside>
+
+      <!-- Right Sidebar: Zen Elements Catalog -->
+      <aside class="zen-sidebar right-sidebar">
+        <div class="panel-section">
+          <h2 class="section-title">Place Elements <span>物</span></h2>
+          
+          <!-- Category Tabs -->
+          <div class="catalog-tabs">
+            <button class="cat-tab active" data-cat="rocks">Rocks</button>
+            <button class="cat-tab" data-cat="flora">Trees & Flora</button>
+            <button class="cat-tab" data-cat="traditional">Architecture</button>
+          </div>
+
+          <!-- Element Cards -->
+          <div class="element-list" id="element-list">
+            <!-- Populated dynamically via JS -->
+          </div>
+
+          <!-- Placement Controls -->
+          <div class="placement-options">
+            <div class="param-row">
+              <label for="elem-scale">Scale: <span id="val-elem-scale">1.0x</span></label>
+              <input type="range" id="elem-scale" min="0.5" max="2.2" step="0.1" value="1.0" />
+            </div>
+            <div class="checkbox-row">
+              <input type="checkbox" id="chk-auto-ripple" checked />
+              <label for="chk-auto-ripple">Auto-rake ripples around stone</label>
+            </div>
+            <div class="delete-mode-row">
+              <button id="btn-delete-mode" class="zen-btn-sm full-width" title="Click any placed element to remove it">
+                🗑️ Remove Element Tool
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Atmosphere & Time of Day -->
+        <div class="panel-section">
+          <h2 class="section-title">Atmosphere <span>気</span></h2>
+          <div class="tod-grid">
+            <button class="tod-btn" data-time="morning" title="Morning Dew (Asa)">
+              <span>🌅</span> Morning
+            </button>
+            <button class="tod-btn active" data-time="noon" title="Zen Sunlight (Hiru)">
+              <span>☀️</span> Noon
+            </button>
+            <button class="tod-btn" data-time="sunset" title="Twilight Sunset (Yūgata)">
+              <span>🌇</span> Sunset
+            </button>
+            <button class="tod-btn" data-time="night" title="Moonlit Night (Yoru)">
+              <span>🌙</span> Night
+            </button>
+          </div>
+
+          <!-- Weather & Snow Precipitation Toggle -->
+          <div class="weather-toggle-row">
+            <button id="btn-toggle-snow" class="snow-toggle-btn active" title="Toggle gentle falling snow particles on or off">
+              <span class="snow-icon">❄️</span>
+              <span class="snow-label">Falling Snow: <strong id="snow-status-text">On</strong></span>
+            </button>
+          </div>
+
+          <!-- Camera Views -->
+          <div class="camera-grid">
+            <button class="cam-btn active" data-cam="orbit" title="Free Orbit View">
+              🎥 Orbit View
+            </button>
+            <button class="cam-btn" data-cam="eye" title="Engawa Veranda Eye-Level Meditation">
+              🪑 Veranda View
+            </button>
+            <button class="cam-btn" data-cam="top" title="Top-Down Garden Plan View">
+              📐 Plan View
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Bottom Hint Bar -->
+      <footer class="zen-footer">
+        <div class="hint-text">
+          <span class="hint-icon">💡</span>
+          <span id="interaction-hint">Click & drag on sand to rake. Arrow keys / WASD to glide camera. Right-click to rotate view.</span>
+        </div>
+        <div class="zen-quote" id="zen-quote">
+          "In the garden of the mind, every stone has its place."
+        </div>
+      </footer>
+    </div>
+
+    <!-- Exit Meditation Mode Floating Button -->
+    <button id="btn-exit-meditate" class="floating-exit-btn hidden" title="Exit meditation view (or press ESC)">
+      ESC ✕ Exit Meditation
+    </button>
+
+  </body>
+</html>
