@@ -202,7 +202,9 @@ class ZenGardenApp {
       ],
       traditional: [
         { id: 'lantern', name: 'Stone Lantern', desc: 'Snow Yukimi Tōrō', icon: '🏮', type: 'decoration' },
-        { id: 'shishi', name: 'Shishi-Odoshi', desc: 'Ticking bamboo rocker', icon: '🎍', type: 'decoration' },
+        { id: 'torii', name: 'Torii Gate', desc: 'Shinto sacred gateway', icon: '⛩️', type: 'decoration' },
+        { id: 'bamboo-fence', name: 'Bamboo Fence', desc: 'Kenninji-gaki edging', icon: '🎍', type: 'decoration' },
+        { id: 'shishi', name: 'Shishi-Odoshi', desc: 'Ticking bamboo rocker', icon: '🎋', type: 'decoration' },
         { id: 'tsukubai', name: 'Water Basin', desc: 'Chiseled stone basin', icon: '🥣', type: 'decoration' },
         { id: 'koi', name: 'Koi Fish', desc: 'Swimming Nishikigoi', icon: '🐟', type: 'decoration' }
       ]
@@ -651,6 +653,8 @@ class ZenGardenApp {
       newObj = treeGenerator.createTree(id, scale);
     } else if (category === 'traditional') {
       if (id === 'lantern') newObj = decorationGenerator.createLantern(scale);
+      else if (id === 'torii') newObj = decorationGenerator.createToriiGate(scale);
+      else if (id === 'bamboo-fence') newObj = decorationGenerator.createBambooFence(scale);
       else if (id === 'shishi') newObj = decorationGenerator.createShishiOdoshi(scale);
       else if (id === 'tsukubai') newObj = decorationGenerator.createTsukubai(scale);
       else if (id === 'koi') {

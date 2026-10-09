@@ -56,6 +56,15 @@ export class GardenPresets {
     lantern.rotation.y = -Math.PI / 4;
     this.app.addPlacedObject(lantern, { type: 'decoration', subType: 'lantern', scale: 0.95 });
 
+    // Bamboo fence edging along the south perimeter
+    const fence1 = decorationGenerator.createBambooFence(0.9, 6.0);
+    fence1.position.set(-6, 0, 16.5);
+    this.app.addPlacedObject(fence1, { type: 'decoration', subType: 'bamboo-fence', scale: 0.9 });
+
+    const fence2 = decorationGenerator.createBambooFence(0.9, 6.0);
+    fence2.position.set(6, 0, 16.5);
+    this.app.addPlacedObject(fence2, { type: 'decoration', subType: 'bamboo-fence', scale: 0.9 });
+
     this.app.weather.setPreset('noon');
   }
 
@@ -144,6 +153,24 @@ export class GardenPresets {
       this.app.addPlacedObject(step, { type: 'decoration', subType: 'stepping', scale: 0.95 });
     });
 
+    // Shinto Torii gate standing at the garden's entrance path
+    const torii = decorationGenerator.createToriiGate(0.95);
+    const toriiX = 1.5, toriiZ = 12.5;
+    torii.position.set(toriiX, this.app.terrain.getHeightAt(toriiX, toriiZ), toriiZ);
+    torii.rotation.y = Math.PI;
+    this.app.addPlacedObject(torii, { type: 'decoration', subType: 'torii', scale: 0.95 });
+
+    // Bamboo fence flanking the stepping stone path
+    const fenceL = decorationGenerator.createBambooFence(0.85, 5.0);
+    fenceL.position.set(-5.5, 0, 10.0);
+    fenceL.rotation.y = Math.PI / 2;
+    this.app.addPlacedObject(fenceL, { type: 'decoration', subType: 'bamboo-fence', scale: 0.85 });
+
+    const fenceR = decorationGenerator.createBambooFence(0.85, 5.0);
+    fenceR.position.set(5.5, 0, 10.0);
+    fenceR.rotation.y = Math.PI / 2;
+    this.app.addPlacedObject(fenceR, { type: 'decoration', subType: 'bamboo-fence', scale: 0.85 });
+
     this.app.weather.setPreset('morning');
   }
 
@@ -222,6 +249,19 @@ export class GardenPresets {
       step.position.set(p.x, Math.max(-0.15, this.app.terrain.getHeightAt(p.x, p.z)) + 0.05, p.z);
       this.app.addPlacedObject(step, { type: 'decoration', subType: 'stepping', scale: 0.9 });
     });
+
+    // Vermilion Torii gate reflected at the pond's edge
+    const torii = decorationGenerator.createToriiGate(1.05);
+    const tX = -8.5, tZ = -6.5;
+    torii.position.set(tX, this.app.terrain.getHeightAt(tX, tZ), tZ);
+    torii.rotation.y = -0.4;
+    this.app.addPlacedObject(torii, { type: 'decoration', subType: 'torii', scale: 1.05 });
+
+    // Bamboo fence along the west bank
+    const fenceW = decorationGenerator.createBambooFence(0.9, 5.5);
+    fenceW.position.set(-11.0, 0, 1.0);
+    fenceW.rotation.y = Math.PI / 2;
+    this.app.addPlacedObject(fenceW, { type: 'decoration', subType: 'bamboo-fence', scale: 0.9 });
 
     this.app.weather.setPreset('sunset');
   }

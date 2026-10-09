@@ -573,6 +573,241 @@ export class DecorationGenerator {
     return fishGroup;
   }
 
+  // 6. Shinto Torii Gate (鳥居) — Vermilion Sacred Gateway
+  createToriiGate(scale = 1.0) {
+    const group = new THREE.Group();
+    group.name = 'torii_gate';
+
+    // Traditional vermilion lacquer material
+    const vermilionMat = new THREE.MeshStandardMaterial({
+      color: 0xc23616,
+      roughness: 0.55,
+      metalness: 0.08
+    });
+
+    // Darker accent for secondary beams
+    const darkVermilion = new THREE.MeshStandardMaterial({
+      color: 0x9c1b06,
+      roughness: 0.6,
+      metalness: 0.06
+    });
+
+    // Black cap material for pillar tops
+    const blackCapMat = new THREE.MeshStandardMaterial({
+      color: 0x1a1a1a,
+      roughness: 0.75,
+      metalness: 0.1
+    });
+
+    const pillarRadius = 0.18;
+    const pillarHeight = 4.2;
+    const pillarSpacing = 3.2; // Distance between two pillars
+    const halfSpacing = pillarSpacing / 2;
+
+    // === 1. Two Main Vertical Pillars (Hashira) ===
+    // Pillars taper slightly and lean inward (entasis + subtle batter)
+    const pillarGeo = new THREE.CylinderGeometry(
+      pillarRadius * 0.88, // Top slightly narrower
+      pillarRadius,
+      pillarHeight,
+      12
+    );
+
+    const leftPillar = new THREE.Mesh(pillarGeo, vermilionMat);
+    leftPillar.position.set(-halfSpacing, pillarHeight / 2, 0);
+    leftPillar.rotation.z = 0.015; // Very slight inward lean
+    leftPillar.castShadow = true;
+    group.add(leftPillar);
+
+    const rightPillar = new THREE.Mesh(pillarGeo, vermilionMat);
+    rightPillar.position.set(halfSpacing, pillarHeight / 2, 0);
+    rightPillar.rotation.z = -0.015;
+    rightPillar.castShadow = true;
+    group.add(rightPillar);
+
+    // === 2. Pillar Base Stone Pedestals (Kamebara) ===
+    const baseGeo = new THREE.CylinderGeometry(0.32, 0.38, 0.2, 10);
+    const leftBase = new THREE.Mesh(baseGeo, this.materials.stone);
+    leftBase.position.set(-halfSpacing, 0.1, 0);
+    leftBase.castShadow = true;
+    group.add(leftBase);
+
+    const rightBase = new THREE.Mesh(baseGeo, this.materials.stone);
+    rightBase.position.set(halfSpacing, 0.1, 0);
+    rightBase.castShadow = true;
+    group.add(rightBase);
+
+    // === 3. Lower Tie Beam (Nuki) — Straight beam connecting pillars ===
+    const nukiWidth = pillarSpacing + pillarRadius * 2;
+    const nukiGeo = new THREE.BoxGeometry(nukiWidth, 0.18, 0.22);
+    const nuki = new THREE.Mesh(nukiGeo, darkVermilion);
+    nuki.position.set(0, pillarHeight * 0.72, 0);
+    nuki.castShadow = true;
+    group.add(nuki);
+
+    // Small wedge accents (Kusabi) above nuki at each pillar
+    const wedgeGeo = new THREE.BoxGeometry(0.12, 0.12, 0.24);
+    for (const side of [-1, 1]) {
+      const wedge = new THREE.Mesh(wedgeGeo, darkVermilion);
+      wedge.position.set(side * halfSpacing, pillarHeight * 0.72 + 0.15, 0);
+      group.add(wedge);
+    }
+
+    // === 4. Top Crossbeam (Kasagi) — Curved upswept main beam ===
+    // Build the curved kasagi as a thick tube following a gentle upswept curve
+    const kasagiPoints = [];
+    const kasagiOverhang = 0.65; // How far beam extends past pillars
+    const kasagiTotalWidth = pillarSpacing + kasagiOverhang * 2 + pillarRadius * 2;
+    const segments = 20;
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const x = (t - 0.5) * kasagiTotalWidth;
+      // Elegant upswept curve at ends (Sori) — parabolic uplift
+      const edgeDist = Math.abs(t - 0.5) * 2; // 0 at center, 1 at edges
+      const uplift = edgeDist * edgeDist * 0.35;
+      const y = pillarHeight + 0.12 + uplift;
+      kasagiPoints.push(new THREE.Vector3(x, y, 0));
+    }
+    const kasagiCurve = new THREE.CatmullRomCurve3(kasagiPoints);
+    const kasagiGeo = new THREE.TubeGeometry(kasagiCurve, 24, 0.16, 8, false);
+    const kasagi = new THREE.Mesh(kasagiGeo, vermilionMat);
+    kasagi.castShadow = true;
+    group.add(kasagi);
+
+    // Flat top board riding on the kasagi (Shimaki ridge cap)
+    const shimakiShape = new THREE.Shape();
+    shimakiShape.moveTo(-kasagiTotalWidth / 2, 0);
+    shimakiShape.lineTo(kasagiTotalWidth / 2, 0);
+    shimakiShape.lineTo(kasagiTotalWidth / 2, 0.08);
+    shimakiShape.lineTo(-kasagiTotalWidth / 2, 0.08);
+    shimakiShape.closePath();
+    const shimakiGeo = new THREE.ExtrudeGeometry(shimakiShape, { depth: 0.3, bevelEnabled: false });
+    const shimaki = new THREE.Mesh(shimakiGeo, blackCapMat);
+    shimaki.position.set(0, pillarHeight + 0.28, -0.15);
+    shimaki.castShadow = true;
+    group.add(shimaki);
+
+    // === 5. End Caps (Gegyo ornamental tip accents at kasagi ends) ===
+    const capGeo = new THREE.CylinderGeometry(0.05, 0.12, 0.22, 6);
+    capGeo.rotateZ(Math.PI / 2);
+    for (const side of [-1, 1]) {
+      const cap = new THREE.Mesh(capGeo, blackCapMat);
+      cap.position.set(side * (kasagiTotalWidth / 2 + 0.05), pillarHeight + 0.15, 0);
+      cap.castShadow = true;
+      group.add(cap);
+    }
+
+    group.scale.setScalar(scale);
+    return group;
+  }
+
+  // 7. Traditional Bamboo Fence Section (竹垣 Takegaki — Kenninji-gaki Style)
+  // Low bamboo edging fence with vertical culms and horizontal rails bound with dark hemp rope
+  createBambooFence(scale = 1.0, sectionWidth = 4.0) {
+    const group = new THREE.Group();
+    group.name = 'bamboo_fence';
+
+    const bambooCulmMat = new THREE.MeshStandardMaterial({
+      color: 0x7a9e52,
+      roughness: 0.42,
+      metalness: 0.06
+    });
+
+    const driedBambooMat = new THREE.MeshStandardMaterial({
+      color: 0xc4a55a,
+      roughness: 0.55,
+      metalness: 0.05
+    });
+
+    const ropeMat = new THREE.MeshStandardMaterial({
+      color: 0x2a2018,
+      roughness: 0.95,
+      metalness: 0.0
+    });
+
+    const fenceHeight = 1.35;
+    const halfWidth = sectionWidth / 2;
+
+    // === 1. Structural End Posts (Thicker anchoring bamboo pillars) ===
+    const postGeo = new THREE.CylinderGeometry(0.065, 0.07, fenceHeight + 0.25, 8);
+    const leftPost = new THREE.Mesh(postGeo, bambooCulmMat);
+    leftPost.position.set(-halfWidth, (fenceHeight + 0.25) / 2, 0);
+    leftPost.castShadow = true;
+    group.add(leftPost);
+
+    const rightPost = new THREE.Mesh(postGeo, bambooCulmMat);
+    rightPost.position.set(halfWidth, (fenceHeight + 0.25) / 2, 0);
+    rightPost.castShadow = true;
+    group.add(rightPost);
+
+    // Post top caps (cut at slight angle)
+    const capGeo = new THREE.ConeGeometry(0.07, 0.08, 8);
+    for (const side of [-1, 1]) {
+      const cap = new THREE.Mesh(capGeo, bambooCulmMat);
+      cap.position.set(side * halfWidth, fenceHeight + 0.3, 0);
+      group.add(cap);
+    }
+
+    // === 2. Horizontal Rails (Dōbuchi) — Two parallel bamboo rails ===
+    const railGeo = new THREE.CylinderGeometry(0.035, 0.035, sectionWidth, 8);
+    railGeo.rotateZ(Math.PI / 2);
+
+    const railPositions = [fenceHeight * 0.3, fenceHeight * 0.72];
+    railPositions.forEach(y => {
+      const rail = new THREE.Mesh(railGeo, driedBambooMat);
+      rail.position.set(0, y, 0);
+      rail.castShadow = true;
+      group.add(rail);
+    });
+
+    // === 3. Vertical Bamboo Slats (Tatezan) — Dense upright culms ===
+    const numSlats = Math.floor(sectionWidth / 0.16);
+    const slatGeo = new THREE.CylinderGeometry(0.022, 0.025, fenceHeight, 6);
+
+    for (let i = 0; i < numSlats; i++) {
+      const t = i / (numSlats - 1);
+      const x = -halfWidth + t * sectionWidth;
+
+      // Alternate front/back offset for woven look
+      const zOff = (i % 2 === 0) ? 0.015 : -0.015;
+
+      // Slight randomized lean for organic feel
+      const lean = (Math.random() - 0.5) * 0.02;
+
+      const slat = new THREE.Mesh(slatGeo, bambooCulmMat);
+      slat.position.set(x, fenceHeight / 2, zOff);
+      slat.rotation.z = lean;
+      slat.castShadow = true;
+      group.add(slat);
+
+      // === 4. Rope Ties (Otoshi-gake knots) at rail intersections ===
+      if (i % 3 === 0) {
+        const knotGeo = new THREE.TorusGeometry(0.04, 0.012, 6, 8);
+        railPositions.forEach(ry => {
+          const knot = new THREE.Mesh(knotGeo, ropeMat);
+          knot.position.set(x, ry, 0.03);
+          knot.rotation.x = Math.PI / 2;
+          knot.rotation.z = Math.random() * 0.3;
+          group.add(knot);
+        });
+      }
+    }
+
+    // === 5. Node Rings (Bamboo segment joints) on posts ===
+    const nodeRingGeo = new THREE.TorusGeometry(0.068, 0.008, 6, 12);
+    nodeRingGeo.rotateX(Math.PI / 2);
+    for (const side of [-1, 1]) {
+      for (let n = 0; n < 4; n++) {
+        const nodeRing = new THREE.Mesh(nodeRingGeo, bambooCulmMat);
+        nodeRing.position.set(side * halfWidth, 0.25 + n * 0.35, 0);
+        group.add(nodeRing);
+      }
+    }
+
+    group.scale.setScalar(scale);
+    return group;
+  }
+
   update(time, dt) {
     for (const item of this.animatedDecorations) {
       item.update(time, dt);
@@ -581,3 +816,4 @@ export class DecorationGenerator {
 }
 
 export const decorationGenerator = new DecorationGenerator();
+
