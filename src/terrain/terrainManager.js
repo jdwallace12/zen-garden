@@ -16,11 +16,9 @@ export class TerrainManager {
 
     // Brush settings
     this.brush = {
-      tool: 'rake',        // 'rake', 'rake-spiral', 'sculpt-raise', 'sculpt-lower', 'smooth', 'paint-moss', 'paint-sand', 'water-pool'
-      radius: 2.5,
-      strength: 0.5,
-      prongs: 5,           // Rake tine count
-      prongSpacing: 0.45
+      tool: 'sculpt-raise', // 'sculpt-raise', 'sculpt-lower', 'smooth', 'paint-moss', 'paint-sand', 'water-pool'
+      radius: 3.2,
+      strength: 0.5
     };
 
     // History for Undo/Redo
@@ -67,7 +65,7 @@ export class TerrainManager {
     this.sandTexture.magFilter = THREE.LinearFilter;
     this.sandTexture.generateMipmaps = true;
 
-    // Normal map canvas for high-frequency rake ripples
+    // Normal map canvas for high-frequency fine texture
     this.normalCanvas = document.createElement('canvas');
     this.normalCanvas.width = this.texResolution;
     this.normalCanvas.height = this.texResolution;
@@ -97,8 +95,8 @@ export class TerrainManager {
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
       const z = pos.getZ(i);
-      // Gentle subtle natural surface
-      const y = this.noise.noise2D(x * 0.05, z * 0.05) * 0.04;
+      // Gentle calm natural surface
+      const y = this.noise.noise2D(x * 0.05, z * 0.05) * 0.012;
       pos.setY(i, y);
       this.initialHeights[i] = y;
     }
@@ -107,11 +105,104 @@ export class TerrainManager {
     this.material = new THREE.MeshStandardMaterial({
       map: this.sandTexture,
       normalMap: this.normalTexture,
-      normalScale: new THREE.Vector2(1.2, 1.2),
-      roughness: 0.88,
-      metalness: 0.05,
+      normalScale: new THREE.Vector2(0.8, 0.8),
+      roughness: 0.90,
+      metalness: 0.04,
       flatShading: false
     });
+
+    // Dynamic Shader Enhancement:
+    // When terrain elevation increases, mounds organically become lush, velvety Japanese moss
+    // (matching classical Saihō-ji & Tōfuku-ji green moss mounds rising out of pristine zen sand)
+    this.material.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <common>',
+        `#include <common>
+        varying vec3 vTerrainWorldPos;
+        varying float vElevation;`
+      );
+
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <project_vertex>',
+        `vElevation = position.y;
+        vTerrainWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+        #include <project_vertex>`
+      );
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <common>',
+        `#include <common>
+        varying vec3 vTerrainWorldPos;
+        varying float vElevation;
+
+        // Procedural noise for natural moss mound edge clumping & velvety micro-texture
+        float terrainHash(vec2 p) {
+          p = fract(p * vec2(123.34, 456.21));
+          p += dot(p, p + 45.32);
+          return fract(p.x * p.y);
+        }
+
+        float terrainNoise(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          vec2 u = f * f * (3.0 - 2.0 * f);
+          float a = terrainHash(i);
+          float b = terrainHash(i + vec2(1.0, 0.0));
+          float c = terrainHash(i + vec2(0.0, 1.0));
+          float d = terrainHash(i + vec2(1.0, 1.0));
+          return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+        }
+
+        float terrainFbm(vec2 p) {
+          float v = 0.0;
+          v += terrainNoise(p) * 0.5;
+          v += terrainNoise(p * 2.1) * 0.25;
+          v += terrainNoise(p * 4.3) * 0.125;
+          return v;
+        }`
+      );
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        
+        // Edge breakup for organic clumping of moss along the mound perimeter
+        float nEdge = (terrainFbm(vTerrainWorldPos.xz * 1.4) - 0.5) * 0.09;
+        float nMicro = terrainFbm(vTerrainWorldPos.xz * 5.2);
+        float effectiveH = vElevation + nEdge;
+
+        // Lush moss blend: starts at ~0.035m baseline, transitions to full moss cover by 0.18m
+        float mossBlend = smoothstep(0.035, 0.18, effectiveH);
+
+        // Authentic Japanese moss palette (Kyoto Saihō-ji / Tōfuku-ji velvet moss mounds)
+        vec3 cMossDeep = vec3(0.19, 0.35, 0.15);   // Rich forest velvet
+        vec3 cMossMid = vec3(0.28, 0.48, 0.20);    // Vibrant emerald moss
+        vec3 cMossLight = vec3(0.38, 0.59, 0.25);  // Sunlit chartreuse tips
+        vec3 cMossWarm = vec3(0.44, 0.53, 0.22);   // Autumnal golden moss tip
+
+        float patchNoise = terrainFbm(vTerrainWorldPos.xz * 0.65);
+        vec3 mossColor = mix(cMossDeep, cMossMid, patchNoise);
+        mossColor = mix(mossColor, cMossLight, nMicro * 0.42);
+        mossColor = mix(mossColor, cMossWarm, patchNoise * 0.22);
+
+        // Pond silt and damp pebble bank when carved below baseline
+        float pondBlend = smoothstep(-0.02, -0.16, vElevation);
+        vec3 siltColor = vec3(0.15, 0.21, 0.19) * (0.8 + 0.35 * nMicro);
+
+        // Blend diffuse color: pristine sand -> lush moss mounds -> pond bed
+        diffuseColor.rgb = mix(diffuseColor.rgb, mossColor, mossBlend);
+        diffuseColor.rgb = mix(diffuseColor.rgb, siltColor, pondBlend);`
+      );
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <roughnessmap_fragment>',
+        `#include <roughnessmap_fragment>
+        // Velvet moss has soft high roughness for plush velvet look
+        roughnessFactor = mix(roughnessFactor, 0.96, mossBlend * 0.9);
+        // Pond basin bed is wet and smoother
+        roughnessFactor = mix(roughnessFactor, 0.28, pondBlend * 0.85);`
+      );
+    };
 
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.receiveShadow = true;
@@ -126,16 +217,16 @@ export class TerrainManager {
     waterGeo.rotateX(-Math.PI / 2);
 
     this.waterMaterial = new THREE.MeshStandardMaterial({
-      color: 0x24556a,
-      roughness: 0.1,
-      metalness: 0.45,
+      color: 0x328ea8,
+      roughness: 0.04,
+      metalness: 0.3,
       transparent: true,
-      opacity: 0.78,
+      opacity: 0.88,
       depthWrite: false
     });
 
     this.waterMesh = new THREE.Mesh(waterGeo, this.waterMaterial);
-    this.waterMesh.position.y = -0.32; // Just below sand baseline
+    this.waterMesh.position.y = -0.16; // Placed right below flat sand baseline (y = 0.0)
     this.waterMesh.receiveShadow = true;
     this.scene.add(this.waterMesh);
   }
@@ -222,20 +313,14 @@ export class TerrainManager {
     const strength = this.brush.strength;
 
     switch (tool) {
-      case 'rake':
-        this.rakeStroke(point, lastPoint);
-        break;
-      case 'rake-spiral':
-        this.rakeConcentric(point, radius);
-        break;
       case 'sculpt-raise':
-        this.deformTerrain(point, radius, strength * 0.12);
+        this.deformTerrain(point, radius, strength * 0.15);
         break;
       case 'sculpt-lower':
-        this.deformTerrain(point, radius, -strength * 0.12);
+        this.deformTerrain(point, radius, -strength * 0.15);
         break;
       case 'smooth':
-        this.smoothTerrain(point, radius, strength * 0.3);
+        this.smoothTerrain(point, radius, strength * 0.35);
         break;
       case 'paint-moss':
         this.paintSurface(point, radius, 'moss', strength);
@@ -249,180 +334,9 @@ export class TerrainManager {
     }
   }
 
-  // 1. Classical Parallel Zen Rake
-  rakeStroke(point, lastPoint) {
-    const c1 = this.worldToCanvas(lastPoint.x, lastPoint.z);
-    const c2 = this.worldToCanvas(point.x, point.z);
-
-    const dx = c2.x - c1.x;
-    const dy = c2.y - c1.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist < 1.0) return;
-
-    // Normal to movement direction
-    const nx = -dy / dist;
-    const ny = dx / dist;
-
-    const prongs = this.brush.prongs;
-    const spacingPx = (this.brush.prongSpacing / this.size) * this.texResolution;
-    const halfProngs = (prongs - 1) / 2;
-
-    this.normalCtx.save();
-    this.ctx.save();
-
-    for (let p = 0; p < prongs; p++) {
-      const offset = (p - halfProngs) * spacingPx;
-      const xStart = c1.x + nx * offset;
-      const yStart = c1.y + ny * offset;
-      const xEnd = c2.x + nx * offset;
-      const yEnd = c2.y + ny * offset;
-
-      // Draw shadow and highlight groove on canvas
-      this.ctx.lineWidth = Math.max(2, spacingPx * 0.45);
-      this.ctx.lineCap = 'round';
-
-      // Inner groove shadow
-      this.ctx.strokeStyle = 'rgba(180, 160, 130, 0.45)';
-      this.ctx.beginPath();
-      this.ctx.moveTo(xStart, yStart);
-      this.ctx.lineTo(xEnd, yEnd);
-      this.ctx.stroke();
-
-      // Ridge highlight
-      this.ctx.lineWidth = Math.max(1, spacingPx * 0.25);
-      this.ctx.strokeStyle = 'rgba(255, 252, 240, 0.35)';
-      this.ctx.beginPath();
-      this.ctx.moveTo(xStart + nx * 2, yStart + ny * 2);
-      this.ctx.lineTo(xEnd + nx * 2, yEnd + ny * 2);
-      this.ctx.stroke();
-
-      // Tangent normal perturbation for 3D light catching
-      const angle = Math.atan2(dy, dx);
-      const normR = Math.floor(128 + Math.cos(angle) * 70);
-      const normG = Math.floor(128 + Math.sin(angle) * 70);
-      this.normalCtx.strokeStyle = `rgb(${normR}, ${normG}, 255)`;
-      this.normalCtx.lineWidth = Math.max(3, spacingPx * 0.5);
-      this.normalCtx.beginPath();
-      this.normalCtx.moveTo(xStart, yStart);
-      this.normalCtx.lineTo(xEnd, yEnd);
-      this.normalCtx.stroke();
-    }
-
-    this.normalCtx.restore();
-    this.ctx.restore();
-
-    this.sandTexture.needsUpdate = true;
-    this.normalTexture.needsUpdate = true;
-
-    // Subtle physical height displacement under rake prongs
-    this.displaceAlongRake(point, lastPoint);
-  }
-
-  displaceAlongRake(p2, p1) {
-    const pos = this.geometry.attributes.position;
-    const prongSpacing = this.brush.prongSpacing;
-    const prongs = this.brush.prongs;
-    const halfProngs = (prongs - 1) / 2;
-
-    const dx = p2.x - p1.x;
-    const dz = p2.z - p1.z;
-    const len = Math.hypot(dx, dz);
-    if (len < 0.05) return;
-
-    const nx = -dz / len;
-    const nz = dx / len;
-
-    // Check vertices within sweep bounds
-    const minX = Math.min(p1.x, p2.x) - 2;
-    const maxX = Math.max(p1.x, p2.x) + 2;
-    const minZ = Math.min(p1.z, p2.z) - 2;
-    const maxZ = Math.max(p1.z, p2.z) + 2;
-
-    let modified = false;
-
-    for (let i = 0; i < pos.count; i++) {
-      const vx = pos.getX(i);
-      const vz = pos.getZ(i);
-
-      if (vx < minX || vx > maxX || vz < minZ || vz > maxZ) continue;
-
-      // Distance to segment
-      const t = Math.max(0, Math.min(1, ((vx - p1.x) * dx + (vz - p1.z) * dz) / (len * len)));
-      const projX = p1.x + t * dx;
-      const projZ = p1.z + t * dz;
-      const distToLine = Math.hypot(vx - projX, vz - projZ);
-
-      // Check distance across rake width
-      const width = prongs * prongSpacing * 0.6;
-      if (distToLine < width) {
-        // High frequency wave across prongs
-        const wave = Math.sin(distToLine / prongSpacing * Math.PI * 2);
-        const influence = Math.cos((distToLine / width) * (Math.PI / 2));
-        const delta = wave * 0.012 * this.brush.strength * influence;
-        pos.setY(i, pos.getY(i) + delta);
-        modified = true;
-      }
-    }
-
-    if (modified) {
-      pos.needsUpdate = true;
-      this.geometry.computeVertexNormals();
-    }
-  }
-
-  // 2. Concentric / Samon Ripple Waves (around rocks or meditation circle)
-  rakeConcentric(center, radius) {
-    const cp = this.worldToCanvas(center.x, center.z);
-    const radiusPx = (radius / this.size) * this.texResolution;
-    const rings = Math.max(3, Math.floor(radius / this.brush.prongSpacing));
-
-    this.ctx.save();
-    this.normalCtx.save();
-
-    for (let r = 1; r <= rings; r++) {
-      const ringRadius = (r / rings) * radiusPx;
-      const alpha = Math.max(0.15, 0.7 - (r / rings) * 0.45);
-
-      // Draw shadow ring
-      this.ctx.strokeStyle = `rgba(185, 165, 135, ${alpha * 0.6})`;
-      this.ctx.lineWidth = 3.5;
-      this.ctx.beginPath();
-      this.ctx.arc(cp.x, cp.y, ringRadius, 0, Math.PI * 2);
-      this.ctx.stroke();
-
-      // Highlight ring
-      this.ctx.strokeStyle = `rgba(255, 252, 245, ${alpha * 0.5})`;
-      this.ctx.lineWidth = 2.0;
-      this.ctx.beginPath();
-      this.ctx.arc(cp.x, cp.y, Math.max(1, ringRadius - 1.5), 0, Math.PI * 2);
-      this.ctx.stroke();
-    }
-
-    this.ctx.restore();
-    this.normalCtx.restore();
-
-    this.sandTexture.needsUpdate = true;
-
-    // Physical ripples in geometry
-    const pos = this.geometry.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      const vx = pos.getX(i);
-      const vz = pos.getZ(i);
-      const dist = Math.hypot(vx - center.x, vz - center.z);
-      if (dist < radius) {
-        const wave = Math.sin((dist / this.brush.prongSpacing) * Math.PI * 2);
-        const falloff = Math.cos((dist / radius) * (Math.PI / 2));
-        const currentY = pos.getY(i);
-        pos.setY(i, currentY + wave * 0.015 * falloff * this.brush.strength);
-      }
-    }
-    pos.needsUpdate = true;
-    this.geometry.computeVertexNormals();
-  }
-
-  // Auto-generate traditional concentric sand ripples around placed stones
-  generateRipplesAround(x, z, radius = 2.8) {
-    this.rakeConcentric({ x, z }, radius);
+  // Nest placed stone in moss bedding if requested
+  nestStoneInMoss(x, z, radius = 1.6) {
+    this.paintSurface({ x, z }, radius, 'moss', 0.85);
   }
 
   // 3. Terrain Sculpting (Raise hills / Lower depressions)
@@ -614,7 +528,7 @@ export class TerrainManager {
 
   // 6. Carve Water Pool / Pond
   carveWaterPool(center, radius, strength) {
-    this.deformTerrain(center, radius, -strength * 0.22);
+    this.deformTerrain(center, radius, -strength * 0.45);
     // Darken pool floor with pebble and damp wet silt
     const cp = this.worldToCanvas(center.x, center.z);
     const radiusPx = (radius / this.size) * this.texResolution;

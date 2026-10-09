@@ -16,7 +16,7 @@ class ZenGardenApp {
     this.currentMode = 'tool'; // 'tool', 'place', 'delete'
     this.selectedElement = { category: 'rocks', type: 'standing' };
     this.elementScale = 1.0;
-    this.autoRipple = true;
+    this.autoMoss = true;
 
     this.isMouseDown = false;
     this.lastHitPoint = null;
@@ -256,6 +256,10 @@ class ZenGardenApp {
         else if (p === 'koi-pond') this.presets.loadKoiPondGarden();
         else if (p === 'procedural') this.presets.generateProceduralSanctuary();
         else if (p === 'blank') this.presets.loadBlankCanvas();
+
+        document.querySelectorAll('.tod-btn').forEach(tb => {
+          tb.classList.toggle('active', tb.dataset.time === this.weather.currentPreset);
+        });
       });
     });
 
@@ -270,17 +274,11 @@ class ZenGardenApp {
         this.currentMode = 'tool';
         this.terrain.brush.tool = btn.dataset.tool;
 
-        // Toggle prong slider visibility
-        const isRake = btn.dataset.tool === 'rake';
-        document.getElementById('prongs-row').style.display = isRake ? 'flex' : 'none';
-
         const hints = {
-          'rake': 'Click & drag across sand to draw parallel rake furrows.',
-          'rake-spiral': 'Click & drag or click once to create concentric Samon wave ripples.',
-          'sculpt-raise': 'Click & drag to elevate gentle mossy mounds and hills.',
+          'sculpt-raise': 'Click & drag to elevate lush green moss mounds and hills.',
           'sculpt-lower': 'Click & drag to carve depressions into the earth.',
           'water-pool': 'Click & drag to carve deep ponds filled with clear water.',
-          'paint-moss': 'Click & drag to paint velvety emerald moss onto the landscape.',
+          'paint-moss': 'Click & drag to paint velvety emerald moss cushions.',
           'paint-sand': 'Click & drag to restore pristine smooth cream sand.',
           'smooth': 'Click & drag to gently level and blend the landscape.'
         };
@@ -295,14 +293,6 @@ class ZenGardenApp {
       const val = parseFloat(e.target.value);
       this.terrain.brush.radius = val;
       sizeVal.textContent = `${val.toFixed(1)}m`;
-    });
-
-    const prongsSlider = document.getElementById('brush-prongs');
-    const prongsVal = document.getElementById('val-brush-prongs');
-    prongsSlider.addEventListener('input', (e) => {
-      const val = parseInt(e.target.value, 10);
-      this.terrain.brush.prongs = val;
-      prongsVal.textContent = val;
     });
 
     const strengthSlider = document.getElementById('brush-strength');
@@ -331,10 +321,12 @@ class ZenGardenApp {
       scaleVal.textContent = `${val.toFixed(1)}x`;
     });
 
-    const chkRipple = document.getElementById('chk-auto-ripple');
-    chkRipple.addEventListener('change', (e) => {
-      this.autoRipple = e.target.checked;
-    });
+    const chkMoss = document.getElementById('chk-auto-moss');
+    if (chkMoss) {
+      chkMoss.addEventListener('change', (e) => {
+        this.autoMoss = e.target.checked;
+      });
+    }
 
     // 5. Delete Tool
     const deleteBtn = document.getElementById('btn-delete-mode');
@@ -348,7 +340,9 @@ class ZenGardenApp {
         this.updateHint('Click any placed rock, tree, or lantern to remove it from the garden.');
       } else {
         this.currentMode = 'tool';
-        document.querySelector('.tool-btn[data-tool="rake"]').classList.add('active');
+        const sculptBtn = document.querySelector('.tool-btn[data-tool="sculpt-raise"]');
+        if (sculptBtn) sculptBtn.classList.add('active');
+        this.terrain.brush.tool = 'sculpt-raise';
       }
     });
 
@@ -554,7 +548,6 @@ class ZenGardenApp {
             this.isDraggingTerrain = true;
             this.lastHitPoint = hit.point.clone();
             this.applyCurrentTool(hit, false);
-            if (this.terrain.brush.tool === 'rake') zenAudio.setRakeIntensity(0.5);
           } else if (this.currentMode === 'place') {
             this.placeCurrentElement(hit.point);
           } else if (this.currentMode === 'delete') {
@@ -578,9 +571,6 @@ class ZenGardenApp {
           const dist = this.lastHitPoint ? this.lastHitPoint.distanceTo(hit.point) : 1;
           if (dist > 0.04) {
             this.applyCurrentTool(hit, true);
-            if (this.terrain.brush.tool === 'rake') {
-              zenAudio.setRakeIntensity(Math.min(2.5, dist * 12));
-            }
             this.lastHitPoint = hit.point.clone();
           }
         }
@@ -592,7 +582,6 @@ class ZenGardenApp {
     window.addEventListener('pointerup', (e) => {
       if (this.isDraggingTerrain) {
         this.isDraggingTerrain = false;
-        zenAudio.stopRaking();
         this.terrain.saveState();
       }
       this.isMouseDown = false;
@@ -623,8 +612,13 @@ class ZenGardenApp {
       // Restore sand & prune moss from rocks/ground
       this.terrain.applyBrush(hit.point, this.lastHitPoint || hit.point, isDragging);
       this.mossManager.pruneMossAt(hit.point, this.terrain.brush.radius);
+    } else if (tool === 'sculpt-raise') {
+      this.terrain.applyBrush(hit.point, this.lastHitPoint || hit.point, isDragging);
+      if (!isDragging || Math.random() < 0.15) {
+        zenAudio.playMossRustle();
+      }
     } else {
-      // Other terrain tools (rake, sculpt, etc.) apply to terrain
+      // Other terrain tools (sculpt-lower, water-pool)
       this.terrain.applyBrush(hit.point, this.lastHitPoint || hit.point, isDragging);
     }
   }
@@ -660,7 +654,7 @@ class ZenGardenApp {
       else if (id === 'shishi') newObj = decorationGenerator.createShishiOdoshi(scale);
       else if (id === 'tsukubai') newObj = decorationGenerator.createTsukubai(scale);
       else if (id === 'koi') {
-        const waterY = Math.min(-0.24, this.terrain.getHeightAt(point.x, point.z) - 0.05);
+        const waterY = Math.min(-0.16, this.terrain.getHeightAt(point.x, point.z) - 0.02);
         newObj = decorationGenerator.createKoiFish(new THREE.Vector3(point.x, waterY, point.z), 3.0 * scale);
       }
     }
@@ -673,10 +667,13 @@ class ZenGardenApp {
       }
       this.addPlacedObject(newObj, { category, id, scale });
 
-      // Automatically generate traditional ripple waves around stone
-      if (this.autoRipple && category === 'rocks') {
-        const rippleR = 2.4 * scale;
-        this.terrain.generateRipplesAround(point.x, point.z, rippleR);
+      // Automatically nest stone in traditional moss bedding
+      if (this.autoMoss && category === 'rocks') {
+        const mossR = 1.6 * scale;
+        this.terrain.nestStoneInMoss(point.x, point.z, mossR);
+        if (this.mossManager) {
+          this.mossManager.growGroundMossBeds(point, 1.2 * scale, this.terrain, 2);
+        }
       }
     }
   }
