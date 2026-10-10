@@ -6,6 +6,7 @@ import { rockGenerator } from './procedural/rockGenerator.js';
 import { treeGenerator } from './procedural/treeGenerator.js';
 import { decorationGenerator } from './procedural/decorations.js';
 import { GardenPresets } from './gardenPresets.js';
+import { GardenSerializer } from './gardenSerializer.js';
 import { zenAudio } from './audio/zenAudio.js';
 import { MossManager } from './procedural/mossManager.js';
 
@@ -35,6 +36,7 @@ class ZenGardenApp {
     this.initWeather();
     this.initBrushCursor();
     this.initPresets();
+    this.initSerializer();
     this.initUI();
     this.initInteraction();
 
@@ -58,8 +60,7 @@ class ZenGardenApp {
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
-      powerPreference: 'high-performance',
-      preserveDrawingBuffer: true
+      powerPreference: 'high-performance'
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -101,6 +102,10 @@ class ZenGardenApp {
 
   initPresets() {
     this.presets = new GardenPresets(this);
+  }
+
+  initSerializer() {
+    this.serializer = new GardenSerializer(this);
   }
 
   initBrushCursor() {
@@ -455,9 +460,21 @@ class ZenGardenApp {
       this.keysPressed.clear();
     });
 
-    // 11. Snapshot Export
-    document.getElementById('btn-snapshot').addEventListener('click', () => {
-      this.takeSnapshot();
+    // 11. Save / Load Garden
+    document.getElementById('btn-save-garden').addEventListener('click', () => {
+      this.serializer.exportGarden();
+      zenAudio.playSingingBowl(280);
+    });
+    document.getElementById('btn-load-garden').addEventListener('click', () => {
+      this.serializer.importGarden();
+    });
+
+    // 12. Drawer Toggles
+    document.getElementById('toggle-left').addEventListener('click', () => {
+      document.getElementById('left-sidebar').classList.toggle('collapsed');
+    });
+    document.getElementById('toggle-right').addEventListener('click', () => {
+      document.getElementById('right-sidebar').classList.toggle('collapsed');
     });
   }
 
@@ -482,48 +499,6 @@ class ZenGardenApp {
   updateHint(text) {
     const hintEl = document.getElementById('interaction-hint');
     if (hintEl) hintEl.textContent = text;
-  }
-
-  // High-Resolution Snapshot with Japanese Calligraphy Seal
-  takeSnapshot() {
-    this.brushCursorGroup.visible = false;
-    this.renderer.render(this.scene, this.camera);
-
-    const snapshotCanvas = document.createElement('canvas');
-    snapshotCanvas.width = this.renderer.domElement.width;
-    snapshotCanvas.height = this.renderer.domElement.height;
-    const sCtx = snapshotCanvas.getContext('2d');
-
-    // Draw 3D scene
-    sCtx.drawImage(this.renderer.domElement, 0, 0);
-
-    // Add traditional vermilion red Japanese stamp seal (Hanko / Inkan)
-    const stampSize = 72;
-    const padding = 32;
-    const x = snapshotCanvas.width - stampSize - padding;
-    const y = snapshotCanvas.height - stampSize - padding;
-
-    sCtx.save();
-    sCtx.fillStyle = 'rgba(184, 51, 36, 0.9)';
-    sCtx.strokeStyle = 'rgba(245, 235, 220, 0.85)';
-    sCtx.lineWidth = 3;
-    sCtx.fillRect(x, y, stampSize, stampSize);
-    sCtx.strokeRect(x, y, stampSize, stampSize);
-
-    sCtx.fillStyle = '#f5ebdc';
-    sCtx.font = 'bold 24px "Noto Serif JP", serif';
-    sCtx.textAlign = 'center';
-    sCtx.textBaseline = 'middle';
-    sCtx.fillText('枯山水', x + stampSize / 2, y + stampSize / 2);
-    sCtx.restore();
-
-    // Trigger download
-    const link = document.createElement('a');
-    link.download = `karesansui-zen-garden-${Date.now()}.png`;
-    link.href = snapshotCanvas.toDataURL('image/png');
-    link.click();
-
-    zenAudio.playSingingBowl(320);
   }
 
   // Pointer / Mouse Interaction

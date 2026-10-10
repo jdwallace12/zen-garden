@@ -3,11 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Karesansui: 3D Procedural Zen Garden Studio</title>
-    <meta name="description" content="A tranquil 3D procedural Zen garden creation studio built with Three.js. Sculpt lush green moss mounds, carve reflective ponds, paint moss, plant bonsai pine, and arrange sacred rocks." />
+    <title>Zen Garden – 3D Garden Studio</title>
+    <meta name="description" content="A tranquil 3D garden creation studio built with Three.js. Sculpt moss mounds, carve reflective ponds, plant trees, and arrange rocks." />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Noto+Serif+JP:wght@400;600&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
@@ -19,53 +19,53 @@
       <!-- Header Banner -->
       <header class="zen-header">
         <div class="logo-group">
-          <div class="enso-symbol" title="Ensō - Circle of Enlightenment">◯</div>
           <div>
-            <h1 class="zen-title">枯山水 KARESANSUI</h1>
-            <p class="zen-subtitle">Procedural 3D Zen Garden Creation Sanctuary</p>
+            <button id="btn-meditate" class="zen-btn zen-btn-outline" title="Hide interface for meditation (Press ESC to return)">
+            <span class="btn-icon">🪷</span> Meditate/Full Screen
+          </button>
+          <button id="btn-singing-bowl" class="zen-btn zen-btn-outline" title="Ring Tibetan singing bowl for mindfulness">
+            <span class="btn-icon">🔔</span> Ring Bowl
+          </button>
           </div>
         </div>
 
         <div class="header-actions">
-          <button id="btn-meditate" class="zen-btn zen-btn-outline" title="Hide interface for meditation (Press ESC to return)">
-            <span class="btn-icon">🪷</span> Meditate
-          </button>
-          <button id="btn-singing-bowl" class="zen-btn zen-btn-gold" title="Ring Tibetan singing bowl for mindfulness">
-            <span class="btn-icon">🔔</span> Ring Bowl
-          </button>
           <button id="btn-audio-toggle" class="zen-btn zen-btn-icon" title="Toggle Soundscape">
             <span id="audio-icon">🔊</span>
           </button>
-          <button id="btn-snapshot" class="zen-btn zen-btn-primary" title="Capture high-resolution Zen snapshot">
-            <span class="btn-icon">📷</span> Snapshot
-          </button>
+          <div class="save-load-group">
+            <button id="btn-save-garden" class="zen-btn zen-btn-save" title="Save your garden as a JSON file">
+              <span class="btn-icon">💾</span> Save
+            </button>
+            <button id="btn-load-garden" class="zen-btn zen-btn-load" title="Load a previously saved garden from a JSON file">
+              <span class="btn-icon">📂</span> Load
+            </button>
+          </div>
         </div>
       </header>
 
       <!-- Left Sidebar: Tools & Actions -->
-      <aside class="zen-sidebar left-sidebar">
+      <aside class="zen-sidebar left-sidebar" id="left-sidebar">
+        <button class="drawer-toggle drawer-toggle-left" id="toggle-left" title="Toggle tools panel">
+          <span class="drawer-toggle-icon">◀</span>
+        </button>
         <!-- Garden Presets -->
         <div class="panel-section">
-          <h2 class="section-title">Garden Presets <span>庭</span></h2>
+          <h2 class="section-title">Garden Presets</h2>
           <div class="preset-grid">
-            <button class="preset-btn active" data-preset="ryoanji" title="Mostly pristine sand sea with 5 classical rock clusters">
-              <span class="p-jp">竜安寺</span>
+            <button class="preset-btn active" data-preset="ryoanji" title="Pristine sand with rock clusters">
               <span class="p-en">Sand Sea</span>
             </button>
-            <button class="preset-btn" data-preset="sanctuary" title="Sculpted green moss mounds, rolling hills, Bonsai Pines & Maples">
-              <span class="p-jp">苔山庭</span>
+            <button class="preset-btn" data-preset="sanctuary" title="Sculpted moss mounds, rolling hills, pines & maples">
               <span class="p-en">Moss Hills</span>
             </button>
-            <button class="preset-btn" data-preset="koi-pond" title="Expansive reflective pond with swimming Koi fish & Sakura">
-              <span class="p-jp">池泉庭</span>
+            <button class="preset-btn" data-preset="koi-pond" title="Reflective pond with swimming fish & cherry blossoms">
               <span class="p-en">Water Pond</span>
             </button>
-            <button class="preset-btn" data-preset="procedural" title="Generate procedurally balanced wabi-sabi garden">
-              <span class="p-jp">無為自然</span>
+            <button class="preset-btn" data-preset="procedural" title="Generate a random garden layout">
               <span class="p-en">Randomize</span>
             </button>
-            <button class="preset-btn" data-preset="blank" title="Clean pristine flat sand canvas">
-              <span class="p-jp">白砂</span>
+            <button class="preset-btn" data-preset="blank" title="Clean flat sand canvas">
               <span class="p-en">Blank Canvas</span>
             </button>
           </div>
@@ -73,7 +73,7 @@
 
         <!-- Landscape Sculpt & Carve Tools -->
         <div class="panel-section">
-          <h2 class="section-title">Landscape & Carving <span>刻</span></h2>
+          <h2 class="section-title">Landscape & Carving</h2>
           <div class="tool-grid">
             <button class="tool-btn active" data-tool="sculpt-raise" title="Sculpt lush green moss mounds & hills">
               <span class="tool-icon">⛰️</span>
@@ -122,10 +122,13 @@
         </div>
       </aside>
 
-      <!-- Right Sidebar: Zen Elements Catalog -->
-      <aside class="zen-sidebar right-sidebar">
+      <!-- Right Sidebar: Elements Catalog -->
+      <aside class="zen-sidebar right-sidebar" id="right-sidebar">
+        <button class="drawer-toggle drawer-toggle-right" id="toggle-right" title="Toggle elements panel">
+          <span class="drawer-toggle-icon">▶</span>
+        </button>
         <div class="panel-section">
-          <h2 class="section-title">Place Elements <span>物</span></h2>
+          <h2 class="section-title">Place Elements</h2>
           
           <!-- Category Tabs -->
           <div class="catalog-tabs">
@@ -159,18 +162,18 @@
 
         <!-- Atmosphere & Time of Day -->
         <div class="panel-section">
-          <h2 class="section-title">Atmosphere <span>気</span></h2>
+          <h2 class="section-title">Atmosphere</h2>
           <div class="tod-grid">
-            <button class="tod-btn" data-time="morning" title="Morning Dew (Asa)">
+            <button class="tod-btn" data-time="morning" title="Morning light">
               <span>🌅</span> Morning
             </button>
-            <button class="tod-btn active" data-time="noon" title="Zen Sunlight (Hiru)">
+            <button class="tod-btn active" data-time="noon" title="Bright sunlight">
               <span>☀️</span> Noon
             </button>
-            <button class="tod-btn" data-time="sunset" title="Twilight Sunset (Yūgata)">
+            <button class="tod-btn" data-time="sunset" title="Twilight sunset">
               <span>🌇</span> Sunset
             </button>
-            <button class="tod-btn" data-time="night" title="Moonlit Night (Yoru)">
+            <button class="tod-btn" data-time="night" title="Moonlit night">
               <span>🌙</span> Night
             </button>
           </div>
@@ -188,8 +191,8 @@
             <button class="cam-btn active" data-cam="orbit" title="Free Orbit View">
               🎥 Orbit View
             </button>
-            <button class="cam-btn" data-cam="eye" title="Engawa Veranda Eye-Level Meditation">
-              🪑 Veranda View
+            <button class="cam-btn" data-cam="eye" title="Eye-level ground view">
+              🪑 Ground View
             </button>
             <button class="cam-btn" data-cam="top" title="Top-Down Garden Plan View">
               📐 Plan View
@@ -202,10 +205,7 @@
       <footer class="zen-footer">
         <div class="hint-text">
           <span class="hint-icon">💡</span>
-          <span id="interaction-hint">Click & drag to sculpt green moss mounds or carve ponds. Arrow keys / WASD to glide camera. Right-click to rotate view.</span>
-        </div>
-        <div class="zen-quote" id="zen-quote">
-          "In the garden of the mind, every stone has its place."
+          <span id="interaction-hint">Click & drag to sculpt moss mounds or carve ponds. Arrow keys / WASD to move camera. Right-click to rotate view.</span>
         </div>
       </footer>
     </div>
