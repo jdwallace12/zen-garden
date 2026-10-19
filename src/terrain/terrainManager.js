@@ -344,6 +344,10 @@ export class TerrainManager {
     const pos = this.geometry.attributes.position;
     let modified = false;
 
+    // Generous height ceiling (raised from 2.5m to 8.5m) allowing grand, towering Zen mounds
+    const MAX_HEIGHT = 20.5;
+    const MIN_HEIGHT = -2.5;
+
     for (let i = 0; i < pos.count; i++) {
       const vx = pos.getX(i);
       const vz = pos.getZ(i);
@@ -352,8 +356,22 @@ export class TerrainManager {
       if (dist < radius) {
         // Smooth cosine bell curve falloff
         const falloff = 0.5 * (1 + Math.cos((dist / radius) * Math.PI));
-        const delta = amount * falloff;
-        const newY = Math.max(-1.8, Math.min(2.5, pos.getY(i) + delta));
+        let delta = amount * falloff;
+        const curY = pos.getY(i);
+
+        // Soft asymptotic damping near the summit to preserve natural rounded mounds and prevent flat tabletop plateaus
+        const dampThreshold = MAX_HEIGHT * 0.65;
+        if (delta > 0 && curY > dampThreshold) {
+          const headroom = Math.max(0, MAX_HEIGHT - curY);
+          const damping = Math.min(1.0, Math.pow(headroom / (MAX_HEIGHT - dampThreshold), 1.25));
+          delta *= damping;
+        } else if (delta < 0 && curY < -1.0) {
+          const depthroom = Math.max(0, curY - MIN_HEIGHT);
+          const damping = Math.min(1.0, depthroom / 1.5);
+          delta *= damping;
+        }
+
+        const newY = Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, curY + delta));
         pos.setY(i, newY);
         modified = true;
       }
@@ -362,6 +380,8 @@ export class TerrainManager {
     if (modified) {
       pos.needsUpdate = true;
       this.geometry.computeVertexNormals();
+      this.geometry.computeBoundingBox();
+      this.geometry.computeBoundingSphere();
     }
   }
 
