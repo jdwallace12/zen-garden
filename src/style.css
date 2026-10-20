@@ -632,7 +632,7 @@ input[type="range"]:active::-webkit-slider-thumb {
 }
 
 .element-card .el-desc {
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   color: var(--ink-muted);
 }
 

@@ -131,6 +131,21 @@ export class GardenPresets {
     lantern.rotation.y = 0.5;
     this.app.addPlacedObject(lantern, { type: 'decoration', subType: 'lantern', scale: 1.15 });
 
+    // Sculpted Flowering Azalea shrubs nestled near stones & lanterns
+    const azalea1 = treeGenerator.createTree('azalea', 1.1);
+    const az1X = hillNorth.x + 3.8;
+    const az1Z = hillNorth.z + 1.2;
+    azalea1.position.set(az1X, this.app.terrain.getHeightAt(az1X, az1Z), az1Z);
+    azalea1.rotation.y = 0.4;
+    this.app.addPlacedObject(azalea1, { type: 'flora', subType: 'azalea', scale: 1.1 });
+
+    const azalea2 = treeGenerator.createTree('azalea-white', 1.05);
+    const az2X = hillSouth.x + 2.0;
+    const az2Z = hillSouth.z - 1.2;
+    azalea2.position.set(az2X, this.app.terrain.getHeightAt(az2X, az2Z), az2Z);
+    azalea2.rotation.y = -0.8;
+    this.app.addPlacedObject(azalea2, { type: 'flora', subType: 'azalea-white', scale: 1.05 });
+
     // 4. Southeast Bamboo Mound
     const hillBamboo = { x: 7.5, z: 6.5 };
     this.app.terrain.deformTerrain(hillBamboo, 4.8, 0.7);
@@ -237,6 +252,20 @@ export class GardenPresets {
     lantern.rotation.y = 0.3;
     this.app.addPlacedObject(lantern, { type: 'decoration', subType: 'lantern', scale: 1.1 });
 
+    // Sculpted flowering azalea shrub nestled near lantern & pond shore
+    const pondAzalea = treeGenerator.createTree('azalea', 1.15);
+    const paX = 4.6, paZ = 4.2;
+    pondAzalea.position.set(paX, this.app.terrain.getHeightAt(paX, paZ), paZ);
+    pondAzalea.rotation.y = 0.8;
+    this.app.addPlacedObject(pondAzalea, { type: 'flora', subType: 'azalea', scale: 1.15 });
+
+    // White azalea shrub tucked along western moss bank
+    const pondAzaleaW = treeGenerator.createTree('azalea-white', 1.0);
+    const pawX = -5.8, pawZ = 1.8;
+    pondAzaleaW.position.set(pawX, this.app.terrain.getHeightAt(pawX, pawZ), pawZ);
+    pondAzaleaW.rotation.y = -0.5;
+    this.app.addPlacedObject(pondAzaleaW, { type: 'flora', subType: 'azalea-white', scale: 1.0 });
+
     // 8. Stepping stones crossing the shallow bank of the pond
     const pondSteps = [
       { x: -1.5, z: 4.5 },
@@ -298,15 +327,17 @@ export class GardenPresets {
           this.app.mossManager.growGroundMossBeds({ x: fx, z: fz }, radius * 0.7, this.app.terrain, 3);
         }
 
-        // Feature element: Tree or Triad Rock
-        if (Math.random() > 0.45) {
-          const treeTypes = ['pine', 'maple', 'sakura', 'bamboo'];
-          const tType = treeTypes[Math.floor(Math.random() * treeTypes.length)];
-          const tree = treeGenerator.createTree(tType, 0.9 + Math.random() * 0.4);
+        // Feature element: Tree, Shrub or Triad Rock
+        if (Math.random() > 0.4) {
+          const floraTypes = ['pine', 'maple', 'sakura', 'bamboo', 'azalea', 'azalea-white'];
+          const fType = floraTypes[Math.floor(Math.random() * floraTypes.length)];
+          const isShrub = fType.startsWith('azalea');
+          const floraScale = isShrub ? (1.0 + Math.random() * 0.3) : (0.9 + Math.random() * 0.4);
+          const flora = treeGenerator.createTree(fType, floraScale);
           const ty = this.app.terrain.getHeightAt(fx, fz);
-          tree.position.set(fx, ty, fz);
-          tree.rotation.y = Math.random() * Math.PI * 2;
-          this.app.addPlacedObject(tree, { type: 'tree', subType: tType, scale: 1.0 });
+          flora.position.set(fx, ty, fz);
+          flora.rotation.y = Math.random() * Math.PI * 2;
+          this.app.addPlacedObject(flora, { type: isShrub ? 'shrub' : 'tree', subType: fType, scale: floraScale });
         } else {
           const rock = rockGenerator.createRock('triad', 1.0 + Math.random() * 0.4);
           const ry = this.app.terrain.getHeightAt(fx, fz);

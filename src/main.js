@@ -193,9 +193,9 @@ class ZenGardenApp {
   getCatalogItems() {
     return {
       rocks: [
-        { id: 'standing', name: 'Taido Stone', desc: 'Tall soul/mountain rock', icon: '🪨', type: 'rock' },
-        { id: 'reclining', name: 'Kikyaku Stone', desc: 'Reclining ox-shaped rock', icon: '⛰️', type: 'rock' },
-        { id: 'flat', name: 'Shintai Stone', desc: 'Flat recumbent water rock', icon: '🥌', type: 'rock' },
+        { id: 'standing', name: 'Taido Stone', desc: 'Tall soul/mountain', icon: '🪨', type: 'rock' },
+        { id: 'reclining', name: 'Kikyaku Stone', desc: 'Reclining ox-shaped', icon: '⛰️', type: 'rock' },
+        { id: 'flat', name: 'Shintai Stone', desc: 'Flat recumbent water', icon: '🥌', type: 'rock' },
         { id: 'triad', name: 'San-zon Triad', desc: 'Sacred 3-stone Trinity', icon: '⛩️', type: 'rock' },
         { id: 'stepping', name: 'Tobi-ishi Step', desc: 'Path stepping slate', icon: '◽', type: 'rock' }
       ],
@@ -203,7 +203,9 @@ class ZenGardenApp {
         { id: 'pine', name: 'Bonsai Pine', desc: 'Matsu cloud foliage', icon: '🌲', type: 'tree' },
         { id: 'maple', name: 'Red Maple', desc: 'Crimson Momiji tree', icon: '🍁', type: 'tree' },
         { id: 'sakura', name: 'Cherry Blossom', desc: 'Pink blossoming Sakura', icon: '🌸', type: 'tree' },
-        { id: 'bamboo', name: 'Bamboo Grove', desc: 'Segmented Take culms', icon: '🎋', type: 'tree' }
+        { id: 'bamboo', name: 'Bamboo Grove', desc: 'Segmented Take culms', icon: '🎋', type: 'tree' },
+        { id: 'azalea', name: 'Azalea Shrub', desc: 'Pink Tsutsuji bloom mound', icon: '🌺', type: 'shrub' },
+        { id: 'azalea-white', name: 'White Azalea', desc: 'Satsuki white flower pillow', icon: '💮', type: 'shrub' }
       ],
       traditional: [
         { id: 'lantern', name: 'Stone Lantern', desc: 'Snow Yukimi Tōrō', icon: '🏮', type: 'decoration' },
@@ -624,7 +626,7 @@ class ZenGardenApp {
 
     if (category === 'rocks') {
       newObj = rockGenerator.createRock(id, scale);
-    } else if (category === 'flora') {
+    } else if (category === 'flora' || type === 'shrub' || type === 'tree') {
       newObj = treeGenerator.createTree(id, scale);
     } else if (category === 'traditional') {
       if (id === 'lantern') newObj = decorationGenerator.createLantern(scale);
@@ -646,12 +648,13 @@ class ZenGardenApp {
       }
       this.addPlacedObject(newObj, { category, id, scale });
 
-      // Automatically nest stone in traditional moss bedding
-      if (this.autoMoss && category === 'rocks') {
-        const mossR = 1.6 * scale;
+      // Automatically nest stone or azalea shrub in traditional moss bedding
+      const isAzalea = typeof id === 'string' && id.startsWith('azalea');
+      if (this.autoMoss && (category === 'rocks' || isAzalea)) {
+        const mossR = (isAzalea ? 1.3 : 1.6) * scale;
         this.terrain.nestStoneInMoss(point.x, point.z, mossR);
         if (this.mossManager) {
-          this.mossManager.growGroundMossBeds(point, 1.2 * scale, this.terrain, 2);
+          this.mossManager.growGroundMossBeds(point, (isAzalea ? 0.95 : 1.2) * scale, this.terrain, 2);
         }
       }
     }

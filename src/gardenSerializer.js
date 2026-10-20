@@ -215,7 +215,7 @@ export class GardenSerializer {
       // Map category/id to generator calls (mirrors placeCurrentElement & gardenPresets logic)
       if (category === 'rocks' || category === 'rock') {
         newObj = rockGenerator.createRock(id, scale);
-      } else if (category === 'flora' || category === 'tree') {
+      } else if (category === 'flora' || category === 'tree' || category === 'shrub') {
         newObj = treeGenerator.createTree(id, scale);
       } else if (category === 'traditional' || category === 'decoration') {
         if (id === 'lantern') newObj = decorationGenerator.createLantern(scale);
