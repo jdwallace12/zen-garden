@@ -148,6 +148,15 @@
               <label for="elem-scale">Scale: <span id="val-elem-scale">1.0x</span></label>
               <input type="range" id="elem-scale" min="0.5" max="2.2" step="0.1" value="1.0" />
             </div>
+            <div class="param-row">
+              <label for="elem-angle">Angle: <span id="val-elem-angle">0°</span></label>
+              <input type="range" id="elem-angle" min="0" max="360" step="5" value="0" />
+            </div>
+            <div class="angle-quick-actions">
+              <button id="btn-rotate-ccw" class="zen-btn-sm" title="Rotate Counter-Clockwise (Press Q)">↺ -45°</button>
+              <button id="btn-rotate-cw" class="zen-btn-sm" title="Rotate Clockwise (Press R or E)">↻ +45°</button>
+              <button id="btn-rotate-random" class="zen-btn-sm" title="Random Angle">🎲 Random</button>
+            </div>
             <div class="checkbox-row">
               <input type="checkbox" id="chk-auto-moss" checked />
               <label for="chk-auto-moss">Nest stones in moss bedding</label>
@@ -205,7 +214,7 @@
       <footer class="zen-footer">
         <div class="hint-text">
           <span class="hint-icon">💡</span>
-          <span id="interaction-hint">Click & drag to sculpt moss mounds or carve ponds. Arrow keys / WASD to move camera. Right-click to rotate view.</span>
+          <span id="interaction-hint">Click & drag to sculpt moss mounds or carve ponds. Arrow keys to pan, W/S to raise/lower elevation. Right-click to rotate view.</span>
         </div>
       </footer>
     </div>

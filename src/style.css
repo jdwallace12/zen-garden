@@ -650,6 +650,32 @@ input[type="range"]:active::-webkit-slider-thumb {
   gap: 9px;
 }
 
+.angle-quick-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.angle-quick-actions .zen-btn-sm {
+  flex: 1;
+  padding: 5px 4px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-align: center;
+  background: var(--glass-bg-control);
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--ink-secondary);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.angle-quick-actions .zen-btn-sm:hover {
+  background: var(--glass-bg-control-hover);
+  color: #ffffff;
+  border-color: var(--glass-border-hover);
+}
+
 .checkbox-row {
   display: flex;
   align-items: center;

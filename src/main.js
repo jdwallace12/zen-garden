@@ -15,8 +15,10 @@ class ZenGardenApp {
     this.container = document.getElementById('canvas-container');
     this.placedObjects = [];
     this.currentMode = 'tool'; // 'tool', 'place', 'delete'
-    this.selectedElement = { category: 'rocks', type: 'standing' };
+    this.selectedElement = { category: 'rocks', id: 'standing', type: 'rock' };
     this.elementScale = 1.0;
+    this.elementRotation = 0; // Rotation angle in radians
+    this.elementRotationDeg = 0; // Rotation angle in degrees [0, 360)
     this.autoMoss = true;
 
     this.isMouseDown = false;
@@ -35,6 +37,7 @@ class ZenGardenApp {
     this.initTerrain();
     this.initWeather();
     this.initBrushCursor();
+    this.initGhostPreview();
     this.initPresets();
     this.initSerializer();
     this.initUI();
@@ -135,11 +138,216 @@ class ZenGardenApp {
     this.scene.add(this.brushCursorGroup);
   }
 
+  // 3D Ghost Preview System for Placed Elements
+  initGhostPreview() {
+    this.ghostPreviewGroup = new THREE.Group();
+    this.ghostPreviewGroup.name = 'placement_ghost_preview';
+    this.ghostPreviewGroup.visible = false;
+
+    // 1. Container for translucent cloned geometry of the selected item
+    this.ghostMeshContainer = new THREE.Group();
+    this.ghostPreviewGroup.add(this.ghostMeshContainer);
+
+    // 2. Ground Footprint Halo & Directional Facing Indicator
+    this.ghostGroundHalo = new THREE.Group();
+    this.ghostGroundHalo.position.y = 0.025; // Sits cleanly above terrain
+
+    // Footprint perimeter ring
+    const ringGeo = new THREE.RingGeometry(0.85, 0.95, 36);
+    ringGeo.rotateX(-Math.PI / 2);
+    this.ghostRingMat = new THREE.MeshBasicMaterial({
+      color: 0x5eead4, // Luminous spiritual turquoise/mint glow
+      transparent: true,
+      opacity: 0.65,
+      side: THREE.DoubleSide
+    });
+    const groundRing = new THREE.Mesh(ringGeo, this.ghostRingMat);
+    groundRing.raycast = () => {};
+    this.ghostGroundHalo.add(groundRing);
+
+    // Inner subtle center indicator
+    const innerDiscGeo = new THREE.RingGeometry(0.04, 0.16, 24);
+    innerDiscGeo.rotateX(-Math.PI / 2);
+    const innerDisc = new THREE.Mesh(innerDiscGeo, this.ghostRingMat);
+    innerDisc.raycast = () => {};
+    this.ghostGroundHalo.add(innerDisc);
+
+    // Directional facing arrow (points along +Z direction to preview angle)
+    const arrowShape = new THREE.Shape();
+    arrowShape.moveTo(0, 1.25);
+    arrowShape.lineTo(0.18, 0.95);
+    arrowShape.lineTo(0.06, 0.98);
+    arrowShape.lineTo(0.06, 0.65);
+    arrowShape.lineTo(-0.06, 0.65);
+    arrowShape.lineTo(-0.06, 0.98);
+    arrowShape.lineTo(-0.18, 0.95);
+    arrowShape.closePath();
+
+    const arrowGeo = new THREE.ShapeGeometry(arrowShape);
+    arrowGeo.rotateX(-Math.PI / 2);
+    const arrowMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide
+    });
+    this.ghostArrow = new THREE.Mesh(arrowGeo, arrowMat);
+    this.ghostArrow.raycast = () => {};
+    this.ghostGroundHalo.add(this.ghostArrow);
+
+    this.ghostPreviewGroup.add(this.ghostGroundHalo);
+    this.scene.add(this.ghostPreviewGroup);
+  }
+
+  createGhostMaterial(originalMat) {
+    if (!originalMat) {
+      return new THREE.MeshStandardMaterial({
+        color: 0x5eead4,
+        transparent: true,
+        opacity: 0.62,
+        roughness: 0.4,
+        depthWrite: false
+      });
+    }
+
+    const ghostMat = originalMat.clone();
+    ghostMat.transparent = true;
+    ghostMat.opacity = 0.65;
+    ghostMat.depthWrite = false; // Prevents clipping on complex multi-part flora and architecture
+    if (ghostMat.emissive) {
+      ghostMat.emissive = new THREE.Color(0x1a4044); // Ethereal tranquil mint tint
+      ghostMat.emissiveIntensity = 0.45;
+    }
+    return ghostMat;
+  }
+
+  instantiateElementMesh(category, id, type, scale = 1.0, isPreview = false) {
+    let newObj = null;
+    const isAnimated = !isPreview;
+
+    if (category === 'rocks') {
+      newObj = rockGenerator.createRock(id, scale);
+    } else if (category === 'flora' || type === 'shrub' || type === 'tree') {
+      newObj = treeGenerator.createTree(id, scale);
+    } else if (category === 'traditional') {
+      if (id === 'lantern') newObj = decorationGenerator.createLantern(scale, isAnimated);
+      else if (id === 'torii') newObj = decorationGenerator.createToriiGate(scale);
+      else if (id === 'bamboo-fence') newObj = decorationGenerator.createBambooFence(scale);
+      else if (id === 'shishi') newObj = decorationGenerator.createShishiOdoshi(scale, isAnimated);
+      else if (id === 'tsukubai') newObj = decorationGenerator.createTsukubai(scale);
+      else if (id === 'stepping') newObj = decorationGenerator.createSteppingStone(scale);
+      else if (id === 'koi') {
+        newObj = decorationGenerator.createKoiFish(new THREE.Vector3(0, 0, 0), 3.0 * scale, isAnimated);
+      }
+    }
+    return newObj;
+  }
+
+  updateGhostPreviewMesh() {
+    if (!this.ghostMeshContainer) return;
+
+    // Clear old preview meshes
+    while (this.ghostMeshContainer.children.length > 0) {
+      const child = this.ghostMeshContainer.children[0];
+      this.ghostMeshContainer.remove(child);
+      if (child.geometry) child.geometry.dispose();
+    }
+
+    if (!this.selectedElement || this.currentMode !== 'place') {
+      if (this.ghostPreviewGroup) this.ghostPreviewGroup.visible = false;
+      return;
+    }
+
+    const { category, id, type } = this.selectedElement;
+    const rawObj = this.instantiateElementMesh(category, id, type, 1.0, true);
+    if (!rawObj) return;
+
+    // Convert all meshes into ghost preview appearance
+    rawObj.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = false;
+        child.receiveShadow = false;
+        child.raycast = () => {}; // Never block or hijack raycasting!
+        if (Array.isArray(child.material)) {
+          child.material = child.material.map(m => this.createGhostMaterial(m));
+        } else if (child.material) {
+          child.material = this.createGhostMaterial(child.material);
+        }
+      }
+      if (child.isLight) {
+        child.intensity = 0;
+      }
+    });
+
+    this.ghostMeshContainer.add(rawObj);
+
+    // Apply scale & rotation immediately
+    this.ghostPreviewGroup.scale.setScalar(this.elementScale);
+    this.ghostPreviewGroup.rotation.y = this.elementRotation;
+  }
+
+  setElementRotation(deg) {
+    let d = Math.round(deg) % 360;
+    if (d < 0) d += 360;
+    this.elementRotationDeg = d;
+    this.elementRotation = (d * Math.PI) / 180;
+
+    const angleSlider = document.getElementById('elem-angle');
+    const angleVal = document.getElementById('val-elem-angle');
+    if (angleSlider) angleSlider.value = d;
+    if (angleVal) angleVal.textContent = `${d}°`;
+
+    if (this.ghostPreviewGroup) {
+      this.ghostPreviewGroup.rotation.y = this.elementRotation;
+    }
+  }
+
+  rotateElementBy(deltaDeg) {
+    this.setElementRotation(this.elementRotationDeg + deltaDeg);
+  }
+
+  randomizeElementRotation() {
+    this.setElementRotation(Math.floor(Math.random() * 72) * 5);
+  }
+
+  updateElementScale(val) {
+    this.elementScale = val;
+    const slider = document.getElementById('elem-scale');
+    const valText = document.getElementById('val-elem-scale');
+    if (slider) slider.value = val;
+    if (valText) valText.textContent = `${val.toFixed(1)}x`;
+    if (this.ghostPreviewGroup) {
+      this.ghostPreviewGroup.scale.setScalar(val);
+    }
+  }
+
   updateBrushCursor(point, normal = null) {
     if (!point || this.currentMode === 'delete') {
       this.brushCursorGroup.visible = false;
+      if (this.ghostPreviewGroup) this.ghostPreviewGroup.visible = false;
       return;
     }
+
+    if (this.currentMode === 'place') {
+      // In place mode: hide red terrain sculpt ring & display 3D ghost preview
+      this.brushCursorGroup.visible = false;
+      if (this.ghostPreviewGroup) {
+        this.ghostPreviewGroup.visible = true;
+        const terrainY = this.terrain.getHeightAt(point.x, point.z);
+        if (this.selectedElement && this.selectedElement.id === 'koi') {
+          const waterY = Math.min(-0.16, terrainY - 0.02);
+          this.ghostPreviewGroup.position.set(point.x, waterY, point.z);
+        } else {
+          this.ghostPreviewGroup.position.set(point.x, terrainY, point.z);
+        }
+        this.ghostPreviewGroup.rotation.y = this.elementRotation;
+        this.ghostPreviewGroup.scale.setScalar(this.elementScale);
+      }
+      return;
+    }
+
+    // In sculpt / landscape tool mode
+    if (this.ghostPreviewGroup) this.ghostPreviewGroup.visible = false;
     this.brushCursorGroup.visible = true;
     const r = this.terrain.brush.radius;
     this.cursorRing.scale.set(r, 1, r);
@@ -243,7 +451,8 @@ class ZenGardenApp {
         document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
         document.getElementById('btn-delete-mode').classList.remove('active');
 
-        this.updateHint(`Click anywhere on the sand to place ${item.name}.`);
+        this.updateGhostPreviewMesh();
+        this.updateHint(`Hover to preview ${item.name}. Click to drop. (Press R or drag slider to rotate)`);
       });
 
       listEl.appendChild(card);
@@ -259,6 +468,15 @@ class ZenGardenApp {
         btn.classList.add('active');
         const p = btn.dataset.preset;
         zenAudio.playSingingBowl(240);
+
+        if (this.ghostPreviewGroup) this.ghostPreviewGroup.visible = false;
+        document.querySelectorAll('.element-card').forEach(c => c.classList.remove('active'));
+        if (this.currentMode === 'place') {
+          this.currentMode = 'tool';
+          const sculptBtn = document.querySelector('.tool-btn[data-tool="sculpt-raise"]');
+          if (sculptBtn) sculptBtn.classList.add('active');
+          this.terrain.brush.tool = 'sculpt-raise';
+        }
 
         if (p === 'ryoanji') this.presets.loadRyoanji();
         else if (p === 'sanctuary') this.presets.loadMountainSanctuary();
@@ -282,6 +500,7 @@ class ZenGardenApp {
         btn.classList.add('active');
         this.currentMode = 'tool';
         this.terrain.brush.tool = btn.dataset.tool;
+        if (this.ghostPreviewGroup) this.ghostPreviewGroup.visible = false;
 
         const hints = {
           'sculpt-raise': 'Click & drag to elevate lush green moss mounds and hills.',
@@ -312,7 +531,7 @@ class ZenGardenApp {
       strengthVal.textContent = `${Math.round(val * 100)}%`;
     });
 
-    // 4. Catalog Categories & Element Scale
+    // 4. Catalog Categories, Scale & Angle Controls
     this.populateCatalog('rocks');
     document.querySelectorAll('.cat-tab').forEach(tab => {
       tab.addEventListener('click', () => {
@@ -323,12 +542,31 @@ class ZenGardenApp {
     });
 
     const scaleSlider = document.getElementById('elem-scale');
-    const scaleVal = document.getElementById('val-elem-scale');
     scaleSlider.addEventListener('input', (e) => {
-      const val = parseFloat(e.target.value);
-      this.elementScale = val;
-      scaleVal.textContent = `${val.toFixed(1)}x`;
+      this.updateElementScale(parseFloat(e.target.value));
     });
+
+    const angleSlider = document.getElementById('elem-angle');
+    if (angleSlider) {
+      angleSlider.addEventListener('input', (e) => {
+        this.setElementRotation(parseFloat(e.target.value));
+      });
+    }
+
+    const btnCcw = document.getElementById('btn-rotate-ccw');
+    if (btnCcw) {
+      btnCcw.addEventListener('click', () => this.rotateElementBy(-45));
+    }
+
+    const btnCw = document.getElementById('btn-rotate-cw');
+    if (btnCw) {
+      btnCw.addEventListener('click', () => this.rotateElementBy(45));
+    }
+
+    const btnRand = document.getElementById('btn-rotate-random');
+    if (btnRand) {
+      btnRand.addEventListener('click', () => this.randomizeElementRotation());
+    }
 
     const chkMoss = document.getElementById('chk-auto-moss');
     if (chkMoss) {
@@ -346,6 +584,7 @@ class ZenGardenApp {
 
       if (deleteBtn.classList.contains('active')) {
         this.currentMode = 'delete';
+        if (this.ghostPreviewGroup) this.ghostPreviewGroup.visible = false;
         this.updateHint('Click any placed rock, tree, or lantern to remove it from the garden.');
       } else {
         this.currentMode = 'tool';
@@ -451,12 +690,35 @@ class ZenGardenApp {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
         this.terrain.redo();
       }
+
+      // Rotate / Scale shortcuts when placing elements
+      if (!isInput && this.currentMode === 'place') {
+        if (e.key.toLowerCase() === 'r' || e.key.toLowerCase() === 'e') {
+          this.rotateElementBy(e.shiftKey ? 45 : 15);
+        } else if (e.key.toLowerCase() === 'q') {
+          this.rotateElementBy(e.shiftKey ? -45 : -15);
+        } else if (e.key === ']' || e.key === '=') {
+          const newScale = Math.min(2.2, parseFloat((this.elementScale + 0.1).toFixed(1)));
+          this.updateElementScale(newScale);
+        } else if (e.key === '[' || e.key === '-') {
+          const newScale = Math.max(0.5, parseFloat((this.elementScale - 0.1).toFixed(1)));
+          this.updateElementScale(newScale);
+        }
+      }
     });
 
     window.addEventListener('keyup', (e) => {
       this.keysPressed.delete(e.code);
       this.keysPressed.delete(e.key);
     });
+
+    window.addEventListener('wheel', (e) => {
+      if (this.currentMode === 'place' && (e.shiftKey || e.altKey)) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 15 : -15;
+        this.rotateElementBy(delta);
+      }
+    }, { passive: false });
 
     window.addEventListener('blur', () => {
       this.keysPressed.clear();
@@ -622,31 +884,19 @@ class ZenGardenApp {
   placeCurrentElement(point) {
     const { category, id, type } = this.selectedElement;
     const scale = this.elementScale;
-    let newObj = null;
-
-    if (category === 'rocks') {
-      newObj = rockGenerator.createRock(id, scale);
-    } else if (category === 'flora' || type === 'shrub' || type === 'tree') {
-      newObj = treeGenerator.createTree(id, scale);
-    } else if (category === 'traditional') {
-      if (id === 'lantern') newObj = decorationGenerator.createLantern(scale);
-      else if (id === 'torii') newObj = decorationGenerator.createToriiGate(scale);
-      else if (id === 'bamboo-fence') newObj = decorationGenerator.createBambooFence(scale);
-      else if (id === 'shishi') newObj = decorationGenerator.createShishiOdoshi(scale);
-      else if (id === 'tsukubai') newObj = decorationGenerator.createTsukubai(scale);
-      else if (id === 'koi') {
-        const waterY = Math.min(-0.16, this.terrain.getHeightAt(point.x, point.z) - 0.02);
-        newObj = decorationGenerator.createKoiFish(new THREE.Vector3(point.x, waterY, point.z), 3.0 * scale);
-      }
-    }
+    const newObj = this.instantiateElementMesh(category, id, type, scale, false);
 
     if (newObj) {
       if (id !== 'koi') {
         const terrainY = this.terrain.getHeightAt(point.x, point.z);
         newObj.position.set(point.x, terrainY, point.z);
-        newObj.rotation.y = Math.random() * Math.PI * 2;
+      } else {
+        const waterY = Math.min(-0.16, this.terrain.getHeightAt(point.x, point.z) - 0.02);
+        newObj.position.set(point.x, waterY, point.z);
       }
-      this.addPlacedObject(newObj, { category, id, scale });
+      newObj.rotation.y = this.elementRotation;
+
+      this.addPlacedObject(newObj, { category, id, scale, rotation: this.elementRotation });
 
       // Automatically nest stone or azalea shrub in traditional moss bedding
       const isAzalea = typeof id === 'string' && id.startsWith('azalea');
@@ -685,24 +935,27 @@ class ZenGardenApp {
     let moveZ = 0;
     let moveY = 0;
 
-    // Arrow keys or WASD
-    if (this.keysPressed.has('ArrowUp') || this.keysPressed.has('KeyW')) {
+    // Horizontal forward/backward navigation (Arrow keys)
+    if (this.keysPressed.has('ArrowUp')) {
       moveZ += 1;
     }
-    if (this.keysPressed.has('ArrowDown') || this.keysPressed.has('KeyS')) {
+    if (this.keysPressed.has('ArrowDown')) {
       moveZ -= 1;
     }
-    if (this.keysPressed.has('ArrowLeft') || this.keysPressed.has('KeyA')) {
+
+    // Lateral left/right navigation (Arrow keys or A/D)
+    if (this.keysPressed.has('ArrowLeft') || this.keysPressed.has('KeyA') || this.keysPressed.has('a') || this.keysPressed.has('A')) {
       moveX -= 1;
     }
-    if (this.keysPressed.has('ArrowRight') || this.keysPressed.has('KeyD')) {
+    if (this.keysPressed.has('ArrowRight') || this.keysPressed.has('KeyD') || this.keysPressed.has('d') || this.keysPressed.has('D')) {
       moveX += 1;
     }
-    // Height elevation adjust (PageUp / PageDown / E / Q)
-    if (this.keysPressed.has('PageUp') || this.keysPressed.has('KeyE')) {
+
+    // W and S keys raise or lower the camera elevation
+    if (this.keysPressed.has('KeyW') || this.keysPressed.has('w') || this.keysPressed.has('W') || this.keysPressed.has('PageUp')) {
       moveY += 1;
     }
-    if (this.keysPressed.has('PageDown') || this.keysPressed.has('KeyQ')) {
+    if (this.keysPressed.has('KeyS') || this.keysPressed.has('s') || this.keysPressed.has('S') || this.keysPressed.has('PageDown')) {
       moveY -= 1;
     }
 
@@ -724,20 +977,49 @@ class ZenGardenApp {
     // Right vector (forward x up)
     this.camRight.crossVectors(this.camForward, THREE.Object3D.DEFAULT_UP).normalize();
 
-    this.moveDelta.set(0, 0, 0);
-    if (moveZ !== 0) {
-      this.moveDelta.addScaledVector(this.camForward, moveZ * speed);
-    }
-    if (moveX !== 0) {
-      this.moveDelta.addScaledVector(this.camRight, moveX * speed);
-    }
-    if (moveY !== 0) {
-      this.moveDelta.y += moveY * speed;
+    // 1. Horizontal panning movement across garden terrain (Arrow keys / A / D)
+    if (moveZ !== 0 || moveX !== 0) {
+      this.moveDelta.set(0, 0, 0);
+      if (moveZ !== 0) {
+        this.moveDelta.addScaledVector(this.camForward, moveZ * speed);
+      }
+      if (moveX !== 0) {
+        this.moveDelta.addScaledVector(this.camRight, moveX * speed);
+      }
+      this.camera.position.add(this.moveDelta);
+      this.controls.target.add(this.moveDelta);
     }
 
-    // Apply movement to both camera position and orbit target so camera glides smoothly
-    this.camera.position.add(this.moveDelta);
-    this.controls.target.add(this.moveDelta);
+    // 2. Vertical elevation movement with automatic pitch toward ground
+    if (moveY !== 0) {
+      const currentH = Math.max(1.0, this.camera.position.y - this.controls.target.y);
+      const newH = THREE.MathUtils.clamp(currentH + moveY * speed, 1.2, 48.0);
+
+      // Pitch angle: from 7° (eye-level horizon) to 82° (steep overview pointing at ground)
+      const u = THREE.MathUtils.clamp((newH - 1.2) / (48.0 - 1.2), 0, 1);
+      const pitchAngle = THREE.MathUtils.lerp(0.12, 1.44, Math.pow(u, 0.85));
+      const targetRxz = newH / Math.tan(pitchAngle);
+
+      // Preserve azimuth orientation relative to target
+      let dx = this.camera.position.x - this.controls.target.x;
+      let dz = this.camera.position.z - this.controls.target.z;
+      let currentRxz = Math.hypot(dx, dz);
+      if (currentRxz < 0.001) {
+        dx = 0;
+        dz = 1;
+        currentRxz = 1;
+      }
+      const dirX = dx / currentRxz;
+      const dirZ = dz / currentRxz;
+
+      this.camera.position.x = this.controls.target.x + dirX * targetRxz;
+      this.camera.position.y = this.controls.target.y + newH;
+      this.camera.position.z = this.controls.target.z + dirZ * targetRxz;
+    }
+
+    // Keep camera elevation comfortable (cannot clip below terrain)
+    this.camera.position.y = THREE.MathUtils.clamp(this.camera.position.y, 0.6, 55.0);
+    this.controls.target.y = THREE.MathUtils.clamp(this.controls.target.y, -0.5, 6.0);
 
     // Keep orbit target within reasonable garden perimeter bounds
     const maxBound = this.terrain.size * 0.75;
@@ -755,6 +1037,11 @@ class ZenGardenApp {
     this.controls.update();
     this.weather.update(elapsedTime, dt);
     decorationGenerator.update(elapsedTime, dt);
+
+    // Subtle breathing pulsation on the placement ghost ground halo
+    if (this.ghostPreviewGroup && this.ghostPreviewGroup.visible && this.ghostRingMat) {
+      this.ghostRingMat.opacity = 0.55 + Math.sin(elapsedTime * 3.5) * 0.18;
+    }
 
     this.renderer.render(this.scene, this.camera);
   }

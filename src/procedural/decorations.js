@@ -74,7 +74,7 @@ export class DecorationGenerator {
   }
 
   // 1. Traditional Japanese Stone Lantern (Yukimi Tōrō - Snow-viewing Lantern)
-  createLantern(scale = 1.0) {
+  createLantern(scale = 1.0, isAnimated = true) {
     const group = new THREE.Group();
     group.name = 'zen_lantern';
 
@@ -110,11 +110,24 @@ export class DecorationGenerator {
     candle.position.y = 0.88;
     group.add(candle);
 
-    // Warm lantern point light
-    const pointLight = new THREE.PointLight(0xffa834, 1.8, 8, 1.8);
-    pointLight.position.set(0, 0.9, 0);
-    pointLight.castShadow = false;
-    group.add(pointLight);
+    // Warm lantern point light & animation
+    if (isAnimated) {
+      const pointLight = new THREE.PointLight(0xffa834, 1.8, 8, 1.8);
+      pointLight.position.set(0, 0.9, 0);
+      pointLight.castShadow = false;
+      group.add(pointLight);
+
+      // Subtle candle flicker animation
+      this.animatedDecorations.push({
+        type: 'lantern',
+        light: pointLight,
+        glowMat: this.materials.lanternGlow,
+        update: (time) => {
+          const flicker = 1.5 + Math.sin(time * 6.5) * 0.15 + Math.sin(time * 19.0) * 0.08;
+          pointLight.intensity = flicker;
+        }
+      });
+    }
 
     // 4. Wide hexagonal umbrella roof (Kasa) that catches snow
     const roofGeo = new THREE.ConeGeometry(1.05, 0.35, 6);
@@ -134,23 +147,12 @@ export class DecorationGenerator {
 
     group.scale.setScalar(scale);
 
-    // Subtle candle flicker animation
-    this.animatedDecorations.push({
-      type: 'lantern',
-      light: pointLight,
-      glowMat: this.materials.lanternGlow,
-      update: (time) => {
-        const flicker = 1.5 + Math.sin(time * 6.5) * 0.15 + Math.sin(time * 19.0) * 0.08;
-        pointLight.intensity = flicker;
-      }
-    });
-
     return group;
   }
 
   // 2. Working Bamboo Water Rocker (Shishi-Odoshi / Deer Scarer)
   // Slowly fills with water from spout, tilts forward, spills water, then rocks back & clacks!
-  createShishiOdoshi(scale = 1.0) {
+  createShishiOdoshi(scale = 1.0, isAnimated = true) {
     const group = new THREE.Group();
     group.name = 'shishi_odoshi';
 
@@ -203,47 +205,49 @@ export class DecorationGenerator {
     group.scale.setScalar(scale);
 
     // Animation physics state
-    let cycleTime = 0;
-    const cycleDuration = 7.0; // Clacks every 7 seconds
-    let didClack = false;
+    if (isAnimated) {
+      let cycleTime = 0;
+      const cycleDuration = 7.0; // Clacks every 7 seconds
+      let didClack = false;
 
-    this.animatedDecorations.push({
-      type: 'shishi_odoshi',
-      update: (time, dt) => {
-        cycleTime = (cycleTime + dt) % cycleDuration;
-        const progress = cycleTime / cycleDuration;
+      this.animatedDecorations.push({
+        type: 'shishi_odoshi',
+        update: (time, dt) => {
+          cycleTime = (cycleTime + dt) % cycleDuration;
+          const progress = cycleTime / cycleDuration;
 
-        // Stage 1: Slowly fills with water (0.0 to 0.7) -> tilts back gently
-        // Stage 2: Heavy water tips rocker forward (0.7 to 0.85) -> pours out
-        // Stage 3: Empty tube falls back rapidly and strikes stone (0.85 to 0.9)
-        // Stage 4: Settles at rest (0.9 to 1.0)
-        let angle = 0;
+          // Stage 1: Slowly fills with water (0.0 to 0.7) -> tilts back gently
+          // Stage 2: Heavy water tips rocker forward (0.7 to 0.85) -> pours out
+          // Stage 3: Empty tube falls back rapidly and strikes stone (0.85 to 0.9)
+          // Stage 4: Settles at rest (0.9 to 1.0)
+          let angle = 0;
 
-        if (progress < 0.7) {
-          angle = 0.15 * Math.sin(progress * Math.PI);
-          didClack = false;
-        } else if (progress < 0.85) {
-          // Tip forward to pour out
-          const tipP = (progress - 0.7) / 0.15;
-          angle = -0.65 * Math.sin(tipP * Math.PI * 0.5);
-        } else if (progress < 0.9) {
-          // Snap back against stone
-          const snapP = (progress - 0.85) / 0.05;
-          angle = THREE.MathUtils.lerp(-0.65, 0.25, snapP);
+          if (progress < 0.7) {
+            angle = 0.15 * Math.sin(progress * Math.PI);
+            didClack = false;
+          } else if (progress < 0.85) {
+            // Tip forward to pour out
+            const tipP = (progress - 0.7) / 0.15;
+            angle = -0.65 * Math.sin(tipP * Math.PI * 0.5);
+          } else if (progress < 0.9) {
+            // Snap back against stone
+            const snapP = (progress - 0.85) / 0.05;
+            angle = THREE.MathUtils.lerp(-0.65, 0.25, snapP);
 
-          if (!didClack && snapP > 0.8) {
-            zenAudio.playBambooClack();
-            didClack = true;
+            if (!didClack && snapP > 0.8) {
+              zenAudio.playBambooClack();
+              didClack = true;
+            }
+          } else {
+            // Rest with slight dampening vibration
+            const restP = (progress - 0.9) / 0.1;
+            angle = 0.25 * Math.exp(-restP * 6.0) * Math.cos(restP * 25);
           }
-        } else {
-          // Rest with slight dampening vibration
-          const restP = (progress - 0.9) / 0.1;
-          angle = 0.25 * Math.exp(-restP * 6.0) * Math.cos(restP * 25);
-        }
 
-        rockerGroup.rotation.z = angle;
-      }
-    });
+          rockerGroup.rotation.z = angle;
+        }
+      });
+    }
 
     return group;
   }
@@ -380,7 +384,7 @@ export class DecorationGenerator {
   }
 
   // 5. Realistic Living Japanese Koi Fish (Nishikigoi)
-  createKoiFish(centerPos = new THREE.Vector3(0, -0.28, 0), radius = 3.5) {
+  createKoiFish(centerPos = new THREE.Vector3(0, -0.28, 0), radius = 3.5, isAnimated = true) {
     const fishGroup = new THREE.Group();
     fishGroup.name = 'koi_fish';
 
@@ -521,54 +525,56 @@ export class DecorationGenerator {
     fishGroup.scale.setScalar(1.1);
 
     // Swimming animation state
-    let angle = Math.random() * Math.PI * 2;
-    const speed = 0.5 + Math.random() * 0.2;
-    const baseRadius = Math.max(1.8, radius);
+    if (isAnimated) {
+      let angle = Math.random() * Math.PI * 2;
+      const speed = 0.5 + Math.random() * 0.2;
+      const baseRadius = Math.max(1.8, radius);
 
-    this.animatedDecorations.push({
-      type: 'koi',
-      update: (time, dt) => {
-        // Natural meandering patrol path (slight organic radius oscillation)
-        const currentR = baseRadius * (0.85 + 0.15 * Math.sin(angle * 2.0));
-        angle += (speed / currentR) * dt;
+      this.animatedDecorations.push({
+        type: 'koi',
+        update: (time, dt) => {
+          // Natural meandering patrol path (slight organic radius oscillation)
+          const currentR = baseRadius * (0.85 + 0.15 * Math.sin(angle * 2.0));
+          angle += (speed / currentR) * dt;
 
-        const posX = centerPos.x + Math.cos(angle) * currentR;
-        const posZ = centerPos.z + Math.sin(angle) * currentR;
-        const posY = centerPos.y + Math.sin(time * 1.6) * 0.02;
+          const posX = centerPos.x + Math.cos(angle) * currentR;
+          const posZ = centerPos.z + Math.sin(angle) * currentR;
+          const posY = centerPos.y + Math.sin(time * 1.6) * 0.02;
 
-        fishGroup.position.set(posX, posY, posZ);
+          fishGroup.position.set(posX, posY, posZ);
 
-        // Heading tangent: koi swims facing forward along path
-        const tangentAngle = Math.atan2(
-          -Math.sin(angle),
-          Math.cos(angle)
-        );
-        fishGroup.rotation.y = tangentAngle;
+          // Heading tangent: koi swims facing forward along path
+          const tangentAngle = Math.atan2(
+            -Math.sin(angle),
+            Math.cos(angle)
+          );
+          fishGroup.rotation.y = tangentAngle;
 
-        // --- Sinuous vertebral swimming wave ---
-        const swimFreq = time * 4.5;
+          // --- Sinuous vertebral swimming wave ---
+          const swimFreq = time * 4.5;
 
-        // Head gently sways
-        headMesh.rotation.y = Math.sin(swimFreq) * 0.08;
+          // Head gently sways
+          headMesh.rotation.y = Math.sin(swimFreq) * 0.08;
 
-        // Mid-torso flexes with phase delay
-        midGroup.rotation.y = Math.sin(swimFreq - 0.7) * 0.18;
+          // Mid-torso flexes with phase delay
+          midGroup.rotation.y = Math.sin(swimFreq - 0.7) * 0.18;
 
-        // Tail flexes with further phase delay
-        tailGroup.rotation.y = Math.sin(swimFreq - 1.4) * 0.36;
+          // Tail flexes with further phase delay
+          tailGroup.rotation.y = Math.sin(swimFreq - 1.4) * 0.36;
 
-        // Caudal tail fin sweeps gracefully with largest stroke
-        caudalGroup.rotation.y = Math.sin(swimFreq - 2.1) * 0.58;
+          // Caudal tail fin sweeps gracefully with largest stroke
+          caudalGroup.rotation.y = Math.sin(swimFreq - 2.1) * 0.58;
 
-        // Pectoral fins flap synchronously for graceful propulsion
-        const pecFlap = Math.sin(swimFreq) * 0.22;
-        leftPec.rotation.z = -0.3 + pecFlap;
-        rightPec.rotation.z = 0.3 - pecFlap;
+          // Pectoral fins flap synchronously for graceful propulsion
+          const pecFlap = Math.sin(swimFreq) * 0.22;
+          leftPec.rotation.z = -0.3 + pecFlap;
+          rightPec.rotation.z = 0.3 - pecFlap;
 
-        // Subtle body roll into turns
-        fishGroup.rotation.z = Math.sin(swimFreq) * 0.05;
-      }
-    });
+          // Subtle body roll into turns
+          fishGroup.rotation.z = Math.sin(swimFreq) * 0.05;
+        }
+      });
+    }
 
     return fishGroup;
   }
