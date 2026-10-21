@@ -62,115 +62,124 @@
 
       <!-- Left Sidebar: Tools & Actions -->
       <aside class="zen-sidebar left-sidebar" id="left-sidebar">
-        <button class="drawer-toggle drawer-toggle-left" id="toggle-left" title="Toggle tools panel">
+        <button class="drawer-toggle drawer-toggle-left" id="toggle-left" title="Toggle tools panel (Hide: ◀, Show: ▶)">
           <span class="drawer-toggle-icon">◀</span>
         </button>
-        <!-- Garden Presets -->
-        <div class="panel-section">
-          <h2 class="section-title">Garden Presets</h2>
-          <div class="preset-grid">
-            <button class="preset-btn active" data-preset="ryoanji" title="Pristine sand with rock clusters">
-              <span class="p-en">Sand Sea</span>
-            </button>
-            <button class="preset-btn" data-preset="sanctuary" title="Sculpted moss mounds, rolling hills, pines & maples">
-              <span class="p-en">Moss Hills</span>
-            </button>
-            <button class="preset-btn" data-preset="koi-pond" title="Reflective pond with swimming fish & cherry blossoms">
-              <span class="p-en">Water Pond</span>
-            </button>
-            <button class="preset-btn" data-preset="procedural" title="Generate a random garden layout">
-              <span class="p-en">Randomize</span>
-            </button>
-            <button class="preset-btn" data-preset="blank" title="Clean flat sand canvas">
-              <span class="p-en">Blank Canvas</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Landscape Sculpt & Carve Tools -->
-        <div class="panel-section">
-          <h2 class="section-title">Landscape & Carving</h2>
-          <div class="tool-grid">
-            <button class="tool-btn active" data-tool="sculpt-raise" title="Sculpt lush green moss mounds & hills">
-              <span class="tool-icon">⛰️</span>
-              <span class="tool-name">Raise Mound</span>
-            </button>
-            <button class="tool-btn" data-tool="sculpt-lower" title="Carve depressions into earth">
-              <span class="tool-icon">⛏️</span>
-              <span class="tool-name">Carve Trench</span>
-            </button>
-            <button class="tool-btn" data-tool="water-pool" title="Carve deep pond filled with reflective water">
-              <span class="tool-icon">💧</span>
-              <span class="tool-name">Carve Pond</span>
-            </button>
-            <button class="tool-btn" data-tool="paint-moss" title="Paint velvety emerald moss cushions">
-              <span class="tool-icon">🍃</span>
-              <span class="tool-name">Paint Moss</span>
-            </button>
-            <button class="tool-btn" data-tool="paint-sand" title="Brush fine cream zen sand">
-              <span class="tool-icon">✨</span>
-              <span class="tool-name">Restore Sand</span>
-            </button>
-            <button class="tool-btn" data-tool="smooth" title="Gently smooth & level terrain">
-              <span class="tool-icon">〰️</span>
-              <span class="tool-name">Smooth</span>
-            </button>
-          </div>
-
-          <!-- Tool Parameters -->
-          <div class="tool-parameters">
-            <div class="param-row">
-              <label for="brush-size">Size: <span id="val-brush-size">3.0m</span></label>
-              <input type="range" id="brush-size" min="1.0" max="8.5" step="0.2" value="3.0" />
-            </div>
-            <div class="param-row">
-              <label for="brush-strength">Intensity: <span id="val-brush-strength">50%</span></label>
-              <input type="range" id="brush-strength" min="0.1" max="1.0" step="0.05" value="0.5" />
+        <div class="left-sidebar-scroll">
+          <!-- Garden Presets -->
+          <div class="panel-section">
+            <h2 class="section-title">
+              <span>Garden Presets</span>
+              <button class="panel-collapse-btn" id="btn-collapse-left" title="Hide left panel">◀</button>
+            </h2>
+            <div class="preset-grid">
+              <button class="preset-btn active" data-preset="ryoanji" title="Pristine sand with rock clusters">
+                <span class="p-en">Sand Sea</span>
+              </button>
+              <button class="preset-btn" data-preset="sanctuary" title="Sculpted moss mounds, rolling hills, pines & maples">
+                <span class="p-en">Moss Hills</span>
+              </button>
+              <button class="preset-btn" data-preset="koi-pond" title="Reflective pond with swimming fish & cherry blossoms">
+                <span class="p-en">Water Pond</span>
+              </button>
+              <button class="preset-btn" data-preset="procedural" title="Generate a random garden layout">
+                <span class="p-en">Randomize</span>
+              </button>
+              <button class="preset-btn" data-preset="blank" title="Clean flat sand canvas">
+                <span class="p-en">Blank Canvas</span>
+              </button>
             </div>
           </div>
-        </div>
-  <!-- Atmosphere & Time of Day -->
-        <div class="panel-section">
-          <h2 class="section-title">Atmosphere</h2>
-          <div class="tod-grid">
-            <button class="tod-btn" data-time="morning" title="Morning light">
-              <span>🌅</span> Morning
-            </button>
-            <button class="tod-btn active" data-time="noon" title="Bright sunlight">
-              <span>☀️</span> Noon
-            </button>
-            <button class="tod-btn" data-time="sunset" title="Twilight sunset">
-              <span>🌇</span> Sunset
-            </button>
-            <button class="tod-btn" data-time="night" title="Moonlit night">
-              <span>🌙</span> Night
-            </button>
+
+          <!-- Landscape Sculpt & Carve Tools -->
+          <div class="panel-section">
+            <h2 class="section-title">Landscape & Carving</h2>
+            <div class="tool-grid">
+              <button class="tool-btn active" data-tool="sculpt-raise" title="Sculpt lush green moss mounds & hills">
+                <span class="tool-icon">⛰️</span>
+                <span class="tool-name">Raise Mound</span>
+              </button>
+              <button class="tool-btn" data-tool="sculpt-lower" title="Carve depressions into earth">
+                <span class="tool-icon">⛏️</span>
+                <span class="tool-name">Carve Trench</span>
+              </button>
+              <button class="tool-btn" data-tool="water-pool" title="Carve deep pond filled with reflective water">
+                <span class="tool-icon">💧</span>
+                <span class="tool-name">Carve Pond</span>
+              </button>
+              <button class="tool-btn" data-tool="paint-moss" title="Paint velvety emerald moss cushions">
+                <span class="tool-icon">🍃</span>
+                <span class="tool-name">Paint Moss</span>
+              </button>
+              <button class="tool-btn" data-tool="paint-sand" title="Brush fine cream zen sand">
+                <span class="tool-icon">✨</span>
+                <span class="tool-name">Restore Sand</span>
+              </button>
+              <button class="tool-btn" data-tool="smooth" title="Gently smooth & level terrain">
+                <span class="tool-icon">〰️</span>
+                <span class="tool-name">Smooth</span>
+              </button>
+            </div>
+
+            <!-- Tool Parameters -->
+            <div class="tool-parameters">
+              <div class="param-row">
+                <label for="brush-size">Size: <span id="val-brush-size">3.0m</span></label>
+                <input type="range" id="brush-size" min="1.0" max="8.5" step="0.2" value="3.0" />
+              </div>
+              <div class="param-row">
+                <label for="brush-strength">Intensity: <span id="val-brush-strength">50%</span></label>
+                <input type="range" id="brush-strength" min="0.1" max="1.0" step="0.05" value="0.5" />
+              </div>
+            </div>
           </div>
 
-          <!-- Weather & Snow Precipitation Toggle -->
-          <div class="weather-toggle-row">
-            <button id="btn-toggle-snow" class="snow-toggle-btn active" title="Toggle gentle falling snow particles on or off">
-              <span class="snow-icon">❄️</span>
-              <span class="snow-label">Falling Snow: <strong id="snow-status-text">On</strong></span>
-            </button>
-          </div>
-        </div>
+          <!-- Atmosphere & Time of Day -->
+          <div class="panel-section">
+            <h2 class="section-title">Atmosphere</h2>
+            <div class="tod-grid">
+              <button class="tod-btn" data-time="morning" title="Morning light">
+                <span>🌅</span> Morning
+              </button>
+              <button class="tod-btn active" data-time="noon" title="Bright sunlight">
+                <span>☀️</span> Noon
+              </button>
+              <button class="tod-btn" data-time="sunset" title="Twilight sunset">
+                <span>🌇</span> Sunset
+              </button>
+              <button class="tod-btn" data-time="night" title="Moonlit night">
+                <span>🌙</span> Night
+              </button>
+            </div>
 
-        <!-- History Actions -->
-        <div class="history-controls">
-          <button id="btn-undo" class="zen-btn-sm" title="Undo (Ctrl+Z)">↺ Undo</button>
-          <button id="btn-redo" class="zen-btn-sm" title="Redo (Ctrl+Y)">↻ Redo</button>
-          <button id="btn-clear-sand" class="zen-btn-sm text-danger" title="Flatten all terrain back to calm sand">Flatten Terrain</button>
+            <!-- Weather & Snow Precipitation Toggle -->
+            <div class="weather-toggle-row">
+              <button id="btn-toggle-snow" class="snow-toggle-btn active" title="Toggle gentle falling snow particles on or off">
+                <span class="snow-icon">❄️</span>
+                <span class="snow-label">Falling Snow: <strong id="snow-status-text">On</strong></span>
+              </button>
+            </div>
+          </div>
+
+          <!-- History Actions -->
+          <div class="history-controls">
+            <button id="btn-undo" class="zen-btn-sm" title="Undo (Ctrl+Z)">↺ Undo</button>
+            <button id="btn-redo" class="zen-btn-sm" title="Redo (Ctrl+Y)">↻ Redo</button>
+            <button id="btn-clear-sand" class="zen-btn-sm text-danger" title="Flatten all terrain back to calm sand">Flatten Terrain</button>
+          </div>
         </div>
       </aside>
 
       <!-- Right Sidebar: Elements Catalog -->
       <aside class="zen-sidebar right-sidebar" id="right-sidebar">
-        <button class="drawer-toggle drawer-toggle-right" id="toggle-right" title="Toggle elements panel">
+        <button class="drawer-toggle drawer-toggle-right" id="toggle-right" title="Toggle elements panel (Hide: ▶, Show: ◀)">
           <span class="drawer-toggle-icon">▶</span>
         </button>
         <div class="panel-section">
-          <h2 class="section-title">Place Elements</h2>
+          <h2 class="section-title">
+            <span>Place Elements</span>
+            <button class="panel-collapse-btn" id="btn-collapse-right" title="Hide right panel">▶</button>
+          </h2>
           
           <!-- Category Tabs -->
           <div class="catalog-tabs">

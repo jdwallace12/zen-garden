@@ -734,12 +734,16 @@ class ZenGardenApp {
     });
 
     // 12. Drawer Toggles
-    document.getElementById('toggle-left').addEventListener('click', () => {
-      document.getElementById('left-sidebar').classList.toggle('collapsed');
-    });
-    document.getElementById('toggle-right').addEventListener('click', () => {
-      document.getElementById('right-sidebar').classList.toggle('collapsed');
-    });
+    const toggleLeft = () => document.getElementById('left-sidebar').classList.toggle('collapsed');
+    const toggleRight = () => document.getElementById('right-sidebar').classList.toggle('collapsed');
+
+    document.getElementById('toggle-left').addEventListener('click', toggleLeft);
+    const btnCollapseLeft = document.getElementById('btn-collapse-left');
+    if (btnCollapseLeft) btnCollapseLeft.addEventListener('click', toggleLeft);
+
+    document.getElementById('toggle-right').addEventListener('click', toggleRight);
+    const btnCollapseRight = document.getElementById('btn-collapse-right');
+    if (btnCollapseRight) btnCollapseRight.addEventListener('click', toggleRight);
   }
 
   setCameraView(mode) {
