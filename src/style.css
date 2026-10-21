@@ -792,33 +792,42 @@ input[type="range"]:active::-webkit-slider-thumb {
   50% { transform: scale(1.22); }
 }
 
-/* Camera Grid */
-.camera-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-}
-
-.cam-btn {
+/* View Modes Segmented Control (Top Nav) */
+.view-modes-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   background: var(--glass-bg-secondary);
   backdrop-filter: var(--glass-blur-subtle);
   -webkit-backdrop-filter: var(--glass-blur-subtle);
   border: 1px solid var(--glass-border-subtle);
   box-shadow: var(--glass-shadow-control);
-  padding: 7px 4px;
-  font-size: 0.68rem;
-  border-radius: var(--radius-sm);
+  padding: 4px;
+  border-radius: var(--radius-full);
+}
+
+.cam-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: var(--radius-full);
   cursor: pointer;
   transition: var(--transition-smooth);
   text-align: center;
-  color: var(--ink-primary);
+  color: var(--ink-secondary);
   font-family: var(--font-sans);
+  white-space: nowrap;
 }
 
 .cam-btn:hover {
   background: var(--glass-bg-secondary-hover);
   border-color: var(--glass-border-hover);
-  box-shadow: var(--glass-shadow-control-hover);
+  color: var(--ink-primary);
   transform: translateY(-1px);
 }
 
@@ -828,6 +837,15 @@ input[type="range"]:active::-webkit-slider-thumb {
   color: #ffffff;
   font-weight: 600;
   box-shadow: var(--glass-shadow-control-active);
+}
+
+.cam-btn-icon {
+  font-size: 0.88rem;
+  line-height: 1;
+}
+
+.cam-btn-label {
+  letter-spacing: 0.01em;
 }
 
 /* Apple-style Capsule Buttons */
@@ -1020,8 +1038,26 @@ input[type="range"]:active::-webkit-slider-thumb {
 }
 
 /* Responsive adjustments */
+@media (max-width: 1080px) {
+  .cam-btn {
+    padding: 6px 10px;
+    font-size: 0.76rem;
+  }
+}
+
 @media (max-width: 960px) {
   .zen-sidebar {
     width: 250px;
   }
+  .zen-header {
+    gap: 8px;
+    padding: 8px 14px;
+  }
+  .cam-btn .cam-btn-label {
+    display: none;
+  }
+  .cam-btn {
+    padding: 6px 9px;
+  }
 }
+

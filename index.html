@@ -21,13 +21,29 @@
         <div class="logo-group">
           <div>
             <button id="btn-meditate" class="zen-btn zen-btn-outline" title="Hide interface for meditation (Press ESC to return)">
-            <span class="btn-icon">🪷</span> Meditate/Full Screen
-          </button>
-          <button id="btn-singing-bowl" class="zen-btn zen-btn-outline" title="Ring Tibetan singing bowl for mindfulness">
-            <span class="btn-icon">🔔</span> Ring Bowl
-          </button>
+              <span class="btn-icon">🪷</span> Meditate/Full Screen
+            </button>
+            <button id="btn-singing-bowl" class="zen-btn zen-btn-outline" title="Ring Tibetan singing bowl for mindfulness">
+              <span class="btn-icon">🔔</span> Ring Bowl
+            </button>
           </div>
         </div>
+
+        <!-- View Modes (Top Nav) -->
+        <nav class="view-modes-group" aria-label="Garden View Modes">
+          <button class="cam-btn active" data-cam="orbit" title="Free Orbit View">
+            <span class="cam-btn-icon">🎥</span>
+            <span class="cam-btn-label">Orbit View</span>
+          </button>
+          <button class="cam-btn" data-cam="eye" title="Eye-level ground view">
+            <span class="cam-btn-icon">🪑</span>
+            <span class="cam-btn-label">Ground View</span>
+          </button>
+          <button class="cam-btn" data-cam="top" title="Top-Down Garden Plan View">
+            <span class="cam-btn-icon">📐</span>
+            <span class="cam-btn-label">Plan View</span>
+          </button>
+        </nav>
 
         <div class="header-actions">
           <button id="btn-audio-toggle" class="zen-btn zen-btn-icon" title="Toggle Soundscape">
@@ -113,6 +129,32 @@
             </div>
           </div>
         </div>
+  <!-- Atmosphere & Time of Day -->
+        <div class="panel-section">
+          <h2 class="section-title">Atmosphere</h2>
+          <div class="tod-grid">
+            <button class="tod-btn" data-time="morning" title="Morning light">
+              <span>🌅</span> Morning
+            </button>
+            <button class="tod-btn active" data-time="noon" title="Bright sunlight">
+              <span>☀️</span> Noon
+            </button>
+            <button class="tod-btn" data-time="sunset" title="Twilight sunset">
+              <span>🌇</span> Sunset
+            </button>
+            <button class="tod-btn" data-time="night" title="Moonlit night">
+              <span>🌙</span> Night
+            </button>
+          </div>
+
+          <!-- Weather & Snow Precipitation Toggle -->
+          <div class="weather-toggle-row">
+            <button id="btn-toggle-snow" class="snow-toggle-btn active" title="Toggle gentle falling snow particles on or off">
+              <span class="snow-icon">❄️</span>
+              <span class="snow-label">Falling Snow: <strong id="snow-status-text">On</strong></span>
+            </button>
+          </div>
+        </div>
 
         <!-- History Actions -->
         <div class="history-controls">
@@ -166,46 +208,6 @@
                 🗑️ Remove Element Tool
               </button>
             </div>
-          </div>
-        </div>
-
-        <!-- Atmosphere & Time of Day -->
-        <div class="panel-section">
-          <h2 class="section-title">Atmosphere</h2>
-          <div class="tod-grid">
-            <button class="tod-btn" data-time="morning" title="Morning light">
-              <span>🌅</span> Morning
-            </button>
-            <button class="tod-btn active" data-time="noon" title="Bright sunlight">
-              <span>☀️</span> Noon
-            </button>
-            <button class="tod-btn" data-time="sunset" title="Twilight sunset">
-              <span>🌇</span> Sunset
-            </button>
-            <button class="tod-btn" data-time="night" title="Moonlit night">
-              <span>🌙</span> Night
-            </button>
-          </div>
-
-          <!-- Weather & Snow Precipitation Toggle -->
-          <div class="weather-toggle-row">
-            <button id="btn-toggle-snow" class="snow-toggle-btn active" title="Toggle gentle falling snow particles on or off">
-              <span class="snow-icon">❄️</span>
-              <span class="snow-label">Falling Snow: <strong id="snow-status-text">On</strong></span>
-            </button>
-          </div>
-
-          <!-- Camera Views -->
-          <div class="camera-grid">
-            <button class="cam-btn active" data-cam="orbit" title="Free Orbit View">
-              🎥 Orbit View
-            </button>
-            <button class="cam-btn" data-cam="eye" title="Eye-level ground view">
-              🪑 Ground View
-            </button>
-            <button class="cam-btn" data-cam="top" title="Top-Down Garden Plan View">
-              📐 Plan View
-            </button>
           </div>
         </div>
       </aside>
