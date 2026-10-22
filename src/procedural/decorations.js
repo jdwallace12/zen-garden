@@ -295,21 +295,75 @@ export class DecorationGenerator {
   }
 
   // 4. Stepping Stones (Tobi-ishi)
+  // Single organic flat slate stepping stone
   createSteppingStone(scale = 1.0) {
-    const geo = new THREE.CylinderGeometry(0.7, 0.78, 0.22, 9);
-    // Slight organic deformation
+    const group = new THREE.Group();
+    group.name = 'zen_stepping_stone';
+    const stoneMesh = this.generateOrganicSlate(scale);
+    group.add(stoneMesh);
+    return group;
+  }
+
+  // 4b. Stepping Stone Walking Trail (Tobi-ishi Chidori-gake Path)
+  // 4 organic river slates placed in a natural staggered walking rhythm
+  createSteppingStonePath(scale = 1.0) {
+    const group = new THREE.Group();
+    group.name = 'zen_stepping_path';
+
+    const stoneConfigs = [
+      { x: -1.65, z: -0.28, rot: 0.2, s: 0.95 },
+      { x: -0.55, z: 0.32, rot: -0.35, s: 1.05 },
+      { x: 0.55, z: -0.22, rot: 0.45, s: 0.92 },
+      { x: 1.65, z: 0.26, rot: -0.15, s: 1.0 }
+    ];
+
+    stoneConfigs.forEach(cfg => {
+      const stoneMesh = this.generateOrganicSlate(cfg.s * scale);
+      stoneMesh.position.set(cfg.x * scale, 0, cfg.z * scale);
+      stoneMesh.rotation.y = cfg.rot;
+      group.add(stoneMesh);
+    });
+
+    return group;
+  }
+
+  // Generate an authentic organic Japanese garden river slate
+  generateOrganicSlate(scale = 1.0) {
+    const radius = 0.72 * scale;
+    const height = 0.32 * scale;
+    const radialSegments = 10;
+    const geo = new THREE.CylinderGeometry(radius * 0.94, radius, height, radialSegments);
+
+    // Organic river rock surface deformation with flat stepping surface
     const pos = geo.attributes.position;
     for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i);
-      const z = pos.getZ(i);
-      pos.setX(i, x * (1.0 + (Math.random() - 0.5) * 0.15));
-      pos.setZ(i, z * (1.0 + (Math.random() - 0.5) * 0.15));
+      let x = pos.getX(i);
+      let y = pos.getY(i);
+      let z = pos.getZ(i);
+
+      // Irregular natural circumference
+      const angle = Math.atan2(z, x);
+      const perturb = 1.0 + Math.sin(angle * 3.0) * 0.08 + Math.cos(angle * 5.0) * 0.05;
+      x *= perturb;
+      z *= perturb;
+
+      // Flatten the top stepping surface slightly while retaining subtle natural bevel
+      if (y > 0) {
+        y *= 0.85;
+      }
+
+      pos.setXYZ(i, x, y, z);
     }
     geo.computeVertexNormals();
 
-    const stone = new THREE.Mesh(geo, this.materials.stone);
-    stone.position.y = 0.08;
-    stone.scale.set(scale, scale * 0.8, scale);
+    const slateMat = new THREE.MeshStandardMaterial({
+      color: 0x56585c,
+      roughness: 0.86,
+      metalness: 0.06
+    });
+
+    const stone = new THREE.Mesh(geo, slateMat);
+    stone.position.y = (height / 2) - 0.03 * scale;
     stone.castShadow = true;
     stone.receiveShadow = true;
     return stone;
@@ -808,6 +862,192 @@ export class DecorationGenerator {
         nodeRing.position.set(side * halfWidth, 0.25 + n * 0.35, 0);
         group.add(nodeRing);
       }
+    }
+
+    group.scale.setScalar(scale);
+    return group;
+  }
+
+  // 7. Traditional Japanese Arched Wooden Bridge (Taiko-bashi / Soribashi)
+  createWoodBridge(scale = 1.0) {
+    const group = new THREE.Group();
+    group.name = 'zen_wood_bridge';
+
+    // Bridge dimensions
+    const length = 5.2;
+    const halfLen = length / 2;
+    const width = 1.5;
+    const halfWidth = width / 2;
+    const archRise = 0.52; // Arch rise height at center
+
+    // Materials
+    const cedarPlankMat = new THREE.MeshStandardMaterial({
+      color: 0x5a3b22,
+      roughness: 0.78,
+      metalness: 0.04
+    });
+
+    const timberBeamMat = new THREE.MeshStandardMaterial({
+      color: 0x3d2716,
+      roughness: 0.82,
+      metalness: 0.05
+    });
+
+    const bronzeCapMat = new THREE.MeshStandardMaterial({
+      color: 0x9c824e,
+      roughness: 0.38,
+      metalness: 0.65
+    });
+
+    const stoneFootingMat = this.materials.stone;
+
+    // Arch elevation function: y(x) = archRise * (1 - (x / halfLen)^2)
+    const getArchY = (x) => archRise * (1.0 - Math.pow(x / halfLen, 2));
+    const getArchSlope = (x) => -2.0 * archRise * x / Math.pow(halfLen, 2);
+
+    // === 1. Transverse Deck Planks (Yuka-ita) ===
+    const numPlanks = 22;
+    const plankWidth = 0.20;
+    const plankThickness = 0.06;
+    const plankGeo = new THREE.BoxGeometry(plankWidth, plankThickness, width);
+
+    for (let i = 0; i < numPlanks; i++) {
+      const t = i / (numPlanks - 1);
+      const x = -halfLen + t * length;
+      const y = getArchY(x) + plankThickness / 2 + 0.12;
+      const slope = getArchSlope(x);
+      const tilt = Math.atan(slope);
+
+      const plank = new THREE.Mesh(plankGeo, cedarPlankMat);
+      plank.position.set(x, y, 0);
+      plank.rotation.z = tilt;
+      plank.castShadow = true;
+      plank.receiveShadow = true;
+      group.add(plank);
+    }
+
+    // === 2. Two Arched Longitudinal Stringer Beams Under Deck ===
+    for (const side of [-1, 1]) {
+      const z = side * (halfWidth - 0.12);
+      const beamSegments = 24;
+      const curvePoints = [];
+      for (let i = 0; i <= beamSegments; i++) {
+        const t = i / beamSegments;
+        const x = -halfLen + t * length;
+        const y = getArchY(x) + 0.06;
+        curvePoints.push(new THREE.Vector3(x, y, z));
+      }
+      const curve = new THREE.CatmullRomCurve3(curvePoints);
+      const beamGeo = new THREE.TubeGeometry(curve, 24, 0.08, 6, false);
+      const beam = new THREE.Mesh(beamGeo, timberBeamMat);
+      beam.castShadow = true;
+      group.add(beam);
+    }
+
+    // === 3. Vertical Support Pilings (Hashira) and Stone Footings ===
+    const postXPositions = [-2.0, 0.0, 2.0];
+    const postRadius = 0.09;
+    const postDepth = 1.3;
+
+    postXPositions.forEach(px => {
+      const deckY = getArchY(px);
+      const postTotalH = deckY + postDepth + 0.12;
+      const postGeo = new THREE.CylinderGeometry(postRadius, postRadius, postTotalH, 8);
+
+      for (const side of [-1, 1]) {
+        const pz = side * (halfWidth - 0.12);
+        const post = new THREE.Mesh(postGeo, timberBeamMat);
+        post.position.set(px, deckY - postTotalH / 2 + 0.12, pz);
+        post.castShadow = true;
+        group.add(post);
+
+        // Stone collar base around waterline / ground
+        const stoneCollarGeo = new THREE.CylinderGeometry(0.16, 0.20, 0.25, 8);
+        const stoneCollar = new THREE.Mesh(stoneCollarGeo, stoneFootingMat);
+        stoneCollar.position.set(px, -0.05, pz);
+        stoneCollar.castShadow = true;
+        group.add(stoneCollar);
+      }
+
+      // Horizontal cross-tie beam (Nuki) connecting left and right posts
+      const tieWidth = width - 0.2;
+      const tieGeo = new THREE.BoxGeometry(0.12, 0.12, tieWidth);
+      const tie = new THREE.Mesh(tieGeo, timberBeamMat);
+      tie.position.set(px, Math.max(0.08, deckY - 0.18), 0);
+      tie.castShadow = true;
+      group.add(tie);
+    });
+
+    // === 4. Handrails (Tesuri) and Baluster Posts (Kōran) ===
+    const railingHeight = 0.72;
+    for (const side of [-1, 1]) {
+      const z = side * (halfWidth + 0.04);
+
+      // Baluster post positions along the arch
+      const railPostX = [-2.4, -1.2, 0.0, 1.2, 2.4];
+      railPostX.forEach((rx, idx) => {
+        const isCorner = (idx === 0 || idx === railPostX.length - 1);
+        const postH = isCorner ? (railingHeight + 0.18) : railingHeight;
+        const pRad = isCorner ? 0.075 : 0.048;
+        const postGeo = new THREE.CylinderGeometry(pRad, pRad, postH, 8);
+
+        const baseDeckY = getArchY(rx) + 0.15;
+        const post = new THREE.Mesh(postGeo, timberBeamMat);
+        post.position.set(rx, baseDeckY + postH / 2, z);
+        post.castShadow = true;
+        group.add(post);
+
+        // Bronze Giboshi (sacred jewel / lotus bud finial) on corner newel posts
+        if (isCorner) {
+          const collarGeo = new THREE.CylinderGeometry(0.10, 0.08, 0.06, 8);
+          const collar = new THREE.Mesh(collarGeo, bronzeCapMat);
+          collar.position.set(rx, baseDeckY + postH + 0.03, z);
+          collar.castShadow = true;
+          group.add(collar);
+
+          const budGeo = new THREE.SphereGeometry(0.09, 8, 8);
+          const bud = new THREE.Mesh(budGeo, bronzeCapMat);
+          bud.scale.set(1.0, 1.4, 1.0);
+          bud.position.set(rx, baseDeckY + postH + 0.11, z);
+          bud.castShadow = true;
+          group.add(bud);
+
+          const tipGeo = new THREE.ConeGeometry(0.04, 0.08, 6);
+          const tip = new THREE.Mesh(tipGeo, bronzeCapMat);
+          tip.position.set(rx, baseDeckY + postH + 0.20, z);
+          tip.castShadow = true;
+          group.add(tip);
+        }
+      });
+
+      // Arched Top Handrail
+      const railCurvePts = [];
+      const railSegments = 20;
+      for (let i = 0; i <= railSegments; i++) {
+        const t = i / railSegments;
+        const rx = -2.4 + t * 4.8;
+        const ry = getArchY(rx) + 0.15 + railingHeight;
+        railCurvePts.push(new THREE.Vector3(rx, ry, z));
+      }
+      const railCurve = new THREE.CatmullRomCurve3(railCurvePts);
+      const topRailGeo = new THREE.TubeGeometry(railCurve, 20, 0.045, 8, false);
+      const topRail = new THREE.Mesh(topRailGeo, timberBeamMat);
+      topRail.castShadow = true;
+      group.add(topRail);
+
+      // Intermediate Middle Rail
+      const midCurvePts = [];
+      for (let i = 0; i <= railSegments; i++) {
+        const t = i / railSegments;
+        const rx = -2.4 + t * 4.8;
+        const ry = getArchY(rx) + 0.15 + railingHeight * 0.48;
+        midCurvePts.push(new THREE.Vector3(rx, ry, z));
+      }
+      const midCurve = new THREE.CatmullRomCurve3(midCurvePts);
+      const midRailGeo = new THREE.TubeGeometry(midCurve, 20, 0.032, 6, false);
+      const midRail = new THREE.Mesh(midRailGeo, timberBeamMat);
+      midRail.castShadow = true;
+      group.add(midRail);
     }
 
     group.scale.setScalar(scale);

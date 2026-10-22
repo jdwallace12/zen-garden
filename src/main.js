@@ -227,16 +227,24 @@ class ZenGardenApp {
     const isAnimated = !isPreview;
 
     if (category === 'rocks') {
-      newObj = rockGenerator.createRock(id, scale);
+      if (id === 'stepping') {
+        newObj = decorationGenerator.createSteppingStone(scale);
+      } else if (id === 'stepping-path') {
+        newObj = decorationGenerator.createSteppingStonePath(scale);
+      } else {
+        newObj = rockGenerator.createRock(id, scale);
+      }
     } else if (category === 'flora' || type === 'shrub' || type === 'tree') {
       newObj = treeGenerator.createTree(id, scale);
     } else if (category === 'traditional') {
-      if (id === 'lantern') newObj = decorationGenerator.createLantern(scale, isAnimated);
+      if (id === 'bridge') newObj = decorationGenerator.createWoodBridge(scale);
+      else if (id === 'stepping') newObj = decorationGenerator.createSteppingStone(scale);
+      else if (id === 'stepping-path') newObj = decorationGenerator.createSteppingStonePath(scale);
+      else if (id === 'lantern') newObj = decorationGenerator.createLantern(scale, isAnimated);
       else if (id === 'torii') newObj = decorationGenerator.createToriiGate(scale);
       else if (id === 'bamboo-fence') newObj = decorationGenerator.createBambooFence(scale);
       else if (id === 'shishi') newObj = decorationGenerator.createShishiOdoshi(scale, isAnimated);
       else if (id === 'tsukubai') newObj = decorationGenerator.createTsukubai(scale);
-      else if (id === 'stepping') newObj = decorationGenerator.createSteppingStone(scale);
       else if (id === 'koi') {
         newObj = decorationGenerator.createKoiFish(new THREE.Vector3(0, 0, 0), 3.0 * scale, isAnimated);
       }
@@ -334,13 +342,13 @@ class ZenGardenApp {
       this.brushCursorGroup.visible = false;
       if (this.ghostPreviewGroup) {
         this.ghostPreviewGroup.visible = true;
-        const terrainY = this.terrain.getHeightAt(point.x, point.z);
-        if (this.selectedElement && this.selectedElement.id === 'koi') {
-          const waterY = Math.min(-0.16, terrainY - 0.02);
-          this.ghostPreviewGroup.position.set(point.x, waterY, point.z);
-        } else {
-          this.ghostPreviewGroup.position.set(point.x, terrainY, point.z);
-        }
+        const placeY = this.calculateElementPlacementY(
+          point,
+          this.selectedElement ? this.selectedElement.id : null,
+          this.elementScale,
+          this.elementRotation
+        );
+        this.ghostPreviewGroup.position.set(point.x, placeY, point.z);
         this.ghostPreviewGroup.rotation.y = this.elementRotation;
         this.ghostPreviewGroup.scale.setScalar(this.elementScale);
       }
@@ -406,7 +414,8 @@ class ZenGardenApp {
         { id: 'reclining', name: 'Kikyaku Stone', desc: 'Reclining ox-shaped', icon: '⛰️', type: 'rock' },
         { id: 'flat', name: 'Shintai Stone', desc: 'Flat recumbent water', icon: '🥌', type: 'rock' },
         { id: 'triad', name: 'San-zon Triad', desc: 'Sacred 3-stone Trinity', icon: '⛩️', type: 'rock' },
-        { id: 'stepping', name: 'Tobi-ishi Step', desc: 'Path stepping slate', icon: '◽', type: 'rock' }
+        { id: 'stepping', name: 'Tobi-ishi Slate', desc: 'Natural path stepping stone', icon: '🪨', type: 'rock' },
+        { id: 'stepping-path', name: 'Stepping Path', desc: '4-stone walking trail', icon: '👣', type: 'rock' }
       ],
       flora: [
         { id: 'pine', name: 'Bonsai Pine', desc: 'Matsu cloud foliage', icon: '🌲', type: 'tree' },
@@ -417,6 +426,9 @@ class ZenGardenApp {
         { id: 'azalea-white', name: 'White Azalea', desc: 'Satsuki white flower pillow', icon: '💮', type: 'shrub' }
       ],
       traditional: [
+        { id: 'bridge', name: 'Wood Bridge', desc: 'Arched cedar Taiko-bashi', icon: '🌉', type: 'decoration' },
+        { id: 'stepping-path', name: 'Stepping Path', desc: 'Curved stone walkway', icon: '👣', type: 'decoration' },
+        { id: 'stepping', name: 'Stepping Stone', desc: 'Natural Tobi-ishi slate', icon: '🪨', type: 'decoration' },
         { id: 'lantern', name: 'Stone Lantern', desc: 'Snow Yukimi Tōrō', icon: '🏮', type: 'decoration' },
         { id: 'torii', name: 'Torii Gate', desc: 'Shinto sacred gateway', icon: '⛩️', type: 'decoration' },
         { id: 'bamboo-fence', name: 'Bamboo Fence', desc: 'Kenninji-gaki edging', icon: '🎍', type: 'decoration' },
@@ -886,26 +898,48 @@ class ZenGardenApp {
     return intersects.length > 0 ? intersects[0] : null;
   }
 
+  calculateElementPlacementY(point, id, scale = 1.0, rotation = 0) {
+    const terrainY = this.terrain.getHeightAt(point.x, point.z);
+    if (id === 'koi') {
+      return Math.min(-0.16, terrainY - 0.02);
+    }
+    if (id === 'bridge') {
+      // Sample terrain height at the two bridge landing banks along its orientation
+      const halfLen = 2.4 * scale;
+      const dirX = Math.cos(rotation);
+      const dirZ = -Math.sin(rotation);
+      const leftBankY = this.terrain.getHeightAt(point.x - dirX * halfLen, point.z - dirZ * halfLen);
+      const rightBankY = this.terrain.getHeightAt(point.x + dirX * halfLen, point.z + dirZ * halfLen);
+      const bankY = Math.max(leftBankY, rightBankY);
+      return Math.max(bankY, terrainY, -0.05);
+    }
+    if (id === 'stepping' || id === 'stepping-path') {
+      // If dropped in water pool (below -0.1), let stepping stones emerge gracefully above water (-0.10)
+      if (terrainY < -0.1) {
+        return -0.10;
+      }
+    }
+    return terrainY;
+  }
+
   placeCurrentElement(point) {
     const { category, id, type } = this.selectedElement;
     const scale = this.elementScale;
     const newObj = this.instantiateElementMesh(category, id, type, scale, false);
 
     if (newObj) {
-      if (id !== 'koi') {
-        const terrainY = this.terrain.getHeightAt(point.x, point.z);
-        newObj.position.set(point.x, terrainY, point.z);
-      } else {
-        const waterY = Math.min(-0.16, this.terrain.getHeightAt(point.x, point.z) - 0.02);
-        newObj.position.set(point.x, waterY, point.z);
-      }
+      const placeY = this.calculateElementPlacementY(point, id, scale, this.elementRotation);
+      newObj.position.set(point.x, placeY, point.z);
       newObj.rotation.y = this.elementRotation;
 
       this.addPlacedObject(newObj, { category, id, scale, rotation: this.elementRotation });
 
       // Automatically nest stone or azalea shrub in traditional moss bedding
+      // (Exclude stepping stones and bridges so clean paths and ponds remain intact)
       const isAzalea = typeof id === 'string' && id.startsWith('azalea');
-      if (this.autoMoss && (category === 'rocks' || isAzalea)) {
+      const isStepping = id === 'stepping' || id === 'stepping-path';
+      const isBridge = id === 'bridge';
+      if (this.autoMoss && !isStepping && !isBridge && (category === 'rocks' || isAzalea)) {
         const mossR = (isAzalea ? 1.3 : 1.6) * scale;
         this.terrain.nestStoneInMoss(point.x, point.z, mossR);
         if (this.mossManager) {

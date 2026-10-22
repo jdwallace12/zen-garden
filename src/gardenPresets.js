@@ -245,6 +245,13 @@ export class GardenPresets {
     maple.position.set(mapX, this.app.terrain.getHeightAt(mapX, mapZ), mapZ);
     this.app.addPlacedObject(maple, { type: 'tree', subType: 'maple', scale: 1.15 });
 
+    // 6b. Arched Japanese Cedar Bridge (Taiko-bashi) spanning over the pond channel
+    const bridge = decorationGenerator.createWoodBridge(0.95);
+    const brX = 2.8, brZ = -2.2;
+    bridge.position.set(brX, 0.02, brZ);
+    bridge.rotation.y = -0.75;
+    this.app.addPlacedObject(bridge, { type: 'decoration', subType: 'bridge', scale: 0.95 });
+
     // 7. Stone Lantern reflecting in the pond water
     const lantern = decorationGenerator.createLantern(1.1);
     const lX = 3.2, lZ = 5.2;

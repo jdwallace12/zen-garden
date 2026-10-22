@@ -214,19 +214,26 @@ export class GardenSerializer {
 
       // Map category/id to generator calls (mirrors placeCurrentElement & gardenPresets logic)
       if (category === 'rocks' || category === 'rock') {
-        newObj = rockGenerator.createRock(id, scale);
+        if (id === 'stepping' || id === 'stepping-stones') {
+          newObj = decorationGenerator.createSteppingStone(scale);
+        } else if (id === 'stepping-path') {
+          newObj = decorationGenerator.createSteppingStonePath(scale);
+        } else {
+          newObj = rockGenerator.createRock(id, scale);
+        }
       } else if (category === 'flora' || category === 'tree' || category === 'shrub') {
         newObj = treeGenerator.createTree(id, scale);
       } else if (category === 'traditional' || category === 'decoration') {
-        if (id === 'lantern') newObj = decorationGenerator.createLantern(scale);
+        if (id === 'bridge') newObj = decorationGenerator.createWoodBridge(scale);
+        else if (id === 'lantern') newObj = decorationGenerator.createLantern(scale);
         else if (id === 'torii') newObj = decorationGenerator.createToriiGate(scale);
         else if (id === 'bamboo-fence') newObj = decorationGenerator.createBambooFence(scale);
         else if (id === 'shishi') newObj = decorationGenerator.createShishiOdoshi(scale);
         else if (id === 'tsukubai') newObj = decorationGenerator.createTsukubai(scale);
-        else if (id === 'stepping') {
-          if (typeof decorationGenerator.createSteppingStone === 'function') {
-            newObj = decorationGenerator.createSteppingStone(scale);
-          }
+        else if (id === 'stepping' || id === 'stepping-stones') {
+          newObj = decorationGenerator.createSteppingStone(scale);
+        } else if (id === 'stepping-path') {
+          newObj = decorationGenerator.createSteppingStonePath(scale);
         } else if (id === 'koi') {
           newObj = decorationGenerator.createKoiFish(
             new THREE.Vector3(position.x, position.y, position.z),
