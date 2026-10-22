@@ -29,6 +29,7 @@ class ZenGardenApp {
     // Keyboard camera navigation state
     this.keysPressed = new Set();
     this.moveSpeed = 16.0; // Units per second
+    this.rotateSpeed = 1.35; // Radians per second for camera rotation (~77 deg/sec)
     this.camForward = new THREE.Vector3();
     this.camRight = new THREE.Vector3();
     this.moveDelta = new THREE.Vector3();
@@ -938,6 +939,7 @@ class ZenGardenApp {
     let moveX = 0;
     let moveZ = 0;
     let moveY = 0;
+    let rotY = 0;
 
     // Horizontal forward/backward navigation (Arrow keys)
     if (this.keysPressed.has('ArrowUp')) {
@@ -947,12 +949,20 @@ class ZenGardenApp {
       moveZ -= 1;
     }
 
-    // Lateral left/right navigation (Arrow keys or A/D)
-    if (this.keysPressed.has('ArrowLeft') || this.keysPressed.has('KeyA') || this.keysPressed.has('a') || this.keysPressed.has('A')) {
+    // Lateral left/right panning navigation (Arrow keys)
+    if (this.keysPressed.has('ArrowLeft')) {
       moveX -= 1;
     }
-    if (this.keysPressed.has('ArrowRight') || this.keysPressed.has('KeyD') || this.keysPressed.has('d') || this.keysPressed.has('D')) {
+    if (this.keysPressed.has('ArrowRight')) {
       moveX += 1;
+    }
+
+    // Camera turn / rotate left & right (A and D keys)
+    if (this.keysPressed.has('KeyA') || this.keysPressed.has('a') || this.keysPressed.has('A')) {
+      rotY += 1; // Turn camera left
+    }
+    if (this.keysPressed.has('KeyD') || this.keysPressed.has('d') || this.keysPressed.has('D')) {
+      rotY -= 1; // Turn camera right
     }
 
     // W and S keys raise or lower the camera elevation
@@ -963,11 +973,19 @@ class ZenGardenApp {
       moveY -= 1;
     }
 
-    if (moveX === 0 && moveZ === 0 && moveY === 0) return;
+    if (moveX === 0 && moveZ === 0 && moveY === 0 && rotY === 0) return;
 
     // Sprint glide speed if Shift held
     const speedMultiplier = (this.keysPressed.has('ShiftLeft') || this.keysPressed.has('ShiftRight')) ? 2.2 : 1.0;
     const speed = this.moveSpeed * speedMultiplier * dt;
+
+    // 1. Camera rotation left/right around focal target (A/D keys)
+    if (rotY !== 0 && this.controls.enableRotate !== false) {
+      const rotAngle = -rotY * this.rotateSpeed * speedMultiplier * dt;
+      const offset = this.camera.position.clone().sub(this.controls.target);
+      offset.applyAxisAngle(THREE.Object3D.DEFAULT_UP, rotAngle);
+      this.camera.position.copy(this.controls.target).add(offset);
+    }
 
     // Calculate camera forward direction on horizontal XZ plane
     this.camForward.subVectors(this.controls.target, this.camera.position);
@@ -981,7 +999,7 @@ class ZenGardenApp {
     // Right vector (forward x up)
     this.camRight.crossVectors(this.camForward, THREE.Object3D.DEFAULT_UP).normalize();
 
-    // 1. Horizontal panning movement across garden terrain (Arrow keys / A / D)
+    // 2. Horizontal panning movement across garden terrain (Arrow keys)
     if (moveZ !== 0 || moveX !== 0) {
       this.moveDelta.set(0, 0, 0);
       if (moveZ !== 0) {
