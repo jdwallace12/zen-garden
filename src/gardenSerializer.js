@@ -73,7 +73,8 @@ export class GardenSerializer {
         size: app.terrain.size,
         segments: app.terrain.segments,
         heights: heightsB64,
-        texture: textureDataUrl
+        texture: textureDataUrl,
+        normalTexture: app.terrain.normalCanvas ? app.terrain.normalCanvas.toDataURL('image/png') : null
       },
       objects,
       weather,
@@ -143,7 +144,7 @@ export class GardenSerializer {
     app.terrain.geometry.computeVertexNormals();
 
     // 3. Restore terrain texture from PNG data URL
-    this._loadTextureFromDataUrl(data.terrain.texture, app.terrain);
+    this._loadTextureFromDataUrl(data.terrain.texture, app.terrain, data.terrain.normalTexture);
 
     // 4. Restore placed objects
     if (data.objects && data.objects.length > 0) {
@@ -256,7 +257,7 @@ export class GardenSerializer {
 
   // ── Texture Restoration ────────────────────────────────────────────
 
-  _loadTextureFromDataUrl(dataUrl, terrain) {
+  _loadTextureFromDataUrl(dataUrl, terrain, normalDataUrl = null) {
     const img = new Image();
     img.onload = () => {
       terrain.ctx.clearRect(0, 0, terrain.texResolution, terrain.texResolution);
@@ -264,6 +265,16 @@ export class GardenSerializer {
       terrain.sandTexture.needsUpdate = true;
     };
     img.src = dataUrl;
+
+    if (normalDataUrl && terrain.normalCtx && terrain.normalTexture) {
+      const normImg = new Image();
+      normImg.onload = () => {
+        terrain.normalCtx.clearRect(0, 0, terrain.texResolution, terrain.texResolution);
+        terrain.normalCtx.drawImage(normImg, 0, 0, terrain.texResolution, terrain.texResolution);
+        terrain.normalTexture.needsUpdate = true;
+      };
+      normImg.src = normalDataUrl;
+    }
   }
 
   // ── Binary Helpers ─────────────────────────────────────────────────

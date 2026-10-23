@@ -122,7 +122,7 @@ class ZenGardenApp {
     const ringMat = new THREE.MeshBasicMaterial({
       color: 0xb83324,
       transparent: true,
-      opacity: 0.6,
+      opacity: 0.65,
       side: THREE.DoubleSide
     });
     this.cursorRing = new THREE.Mesh(ringGeo, ringMat);
@@ -134,6 +134,28 @@ class ZenGardenApp {
     const dotMat = new THREE.MeshBasicMaterial({ color: 0xb83324, side: THREE.DoubleSide });
     this.cursorDot = new THREE.Mesh(dotGeo, dotMat);
     this.brushCursorGroup.add(this.cursorDot);
+
+    // Vertical rake tines indicator for Sand Rake tool
+    this.rakeCursorLines = new THREE.Group();
+    const rakeLineMat = new THREE.LineBasicMaterial({
+      color: 0xd49b4d,
+      transparent: true,
+      opacity: 0.85
+    });
+    const rakeTinesCount = 7;
+    for (let i = 0; i < rakeTinesCount; i++) {
+      const u = (i / (rakeTinesCount - 1)) * 2 - 1; // -1 to +1
+      const halfZ = Math.sqrt(Math.max(0, 1.0 - u * u)) * 0.92;
+      const points = [
+        new THREE.Vector3(u, 0.01, -halfZ),
+        new THREE.Vector3(u, 0.01, halfZ)
+      ];
+      const geo = new THREE.BufferGeometry().setFromPoints(points);
+      const line = new THREE.Line(geo, rakeLineMat);
+      this.rakeCursorLines.add(line);
+    }
+    this.rakeCursorLines.visible = false;
+    this.brushCursorGroup.add(this.rakeCursorLines);
 
     this.brushCursorGroup.visible = false;
     this.scene.add(this.brushCursorGroup);
@@ -359,7 +381,20 @@ class ZenGardenApp {
     if (this.ghostPreviewGroup) this.ghostPreviewGroup.visible = false;
     this.brushCursorGroup.visible = true;
     const r = this.terrain.brush.radius;
+    const isRake = this.terrain.brush.tool === 'rake-sand';
+
     this.cursorRing.scale.set(r, 1, r);
+    if (this.rakeCursorLines) {
+      this.rakeCursorLines.scale.set(r, 1, r);
+      this.rakeCursorLines.visible = isRake;
+    }
+    if (this.cursorRing.material) {
+      this.cursorRing.material.color.setHex(isRake ? 0xd49b4d : 0xb83324);
+    }
+    if (this.cursorDot.material) {
+      this.cursorDot.material.color.setHex(isRake ? 0xd49b4d : 0xb83324);
+    }
+
     this.brushCursorGroup.position.copy(point);
 
     if (normal) {
@@ -516,12 +551,10 @@ class ZenGardenApp {
         if (this.ghostPreviewGroup) this.ghostPreviewGroup.visible = false;
 
         const hints = {
-          'sculpt-raise': 'Click & drag to elevate lush green moss mounds and hills.',
-          'sculpt-lower': 'Click & drag to carve depressions into the earth.',
-          'water-pool': 'Click & drag to carve deep ponds filled with clear water.',
-          'paint-moss': 'Click & drag to paint velvety emerald moss cushions.',
-          'paint-sand': 'Click & drag to restore pristine smooth cream sand.',
-          'smooth': 'Click & drag to gently level and blend the landscape.'
+          'sculpt-raise': 'Click & drag to raise lush moss mounds and rolling hills.',
+          'sculpt-lower': 'Click & drag to lower terrain and carve depressions.',
+          'smooth': 'Click & drag to gently level and blend the terrain.',
+          'rake-sand': 'Click & drag to rake the sand in serene vertical lines.'
         };
         this.updateHint(hints[btn.dataset.tool] || 'Drag on terrain to carve.');
       });
@@ -842,6 +875,7 @@ class ZenGardenApp {
         this.isDraggingTerrain = false;
         this.terrain.saveState();
       }
+      zenAudio.stopRaking();
       this.isMouseDown = false;
       this.lastHitPoint = null;
     });
@@ -852,31 +886,27 @@ class ZenGardenApp {
 
   applyCurrentTool(hit, isDragging = false) {
     const tool = this.terrain.brush.tool;
-    const isRockOrObject = hit.object !== this.terrain.mesh;
 
-    if (tool === 'paint-moss') {
-      if (isRockOrObject) {
-        // Grow moss directly clinging to the rock or lantern surface!
-        this.mossManager.growMossOnRock(hit, this.terrain.brush.radius, 4);
-        zenAudio.playMossRustle();
-      } else {
-        // Paint thick cushion bed on the terrain (elevates physical height & paints texture)
-        this.terrain.paintSurface(hit.point, this.terrain.brush.radius, 'moss', this.terrain.brush.strength);
-        // Grow volumetric 3D cushion moss pillows
-        this.mossManager.growGroundMossBeds(hit.point, this.terrain.brush.radius, this.terrain, 2);
-        zenAudio.playMossRustle();
+    if (tool === 'rake-sand') {
+      const dist = this.lastHitPoint ? this.lastHitPoint.distanceTo(hit.point) : 0.08;
+      this.terrain.rakeSand(hit.point, this.terrain.brush.radius, this.terrain.brush.strength);
+      if (this.mossManager) {
+        this.mossManager.pruneMossAt(hit.point, this.terrain.brush.radius);
       }
-    } else if (tool === 'paint-sand' || tool === 'smooth') {
-      // Restore sand & prune moss from rocks/ground
+      zenAudio.setRakeIntensity(Math.min(2.0, Math.max(0.4, dist * 6.0)));
+    } else if (tool === 'smooth') {
       this.terrain.applyBrush(hit.point, this.lastHitPoint || hit.point, isDragging);
-      this.mossManager.pruneMossAt(hit.point, this.terrain.brush.radius);
+      if (this.mossManager) {
+        this.mossManager.pruneMossAt(hit.point, this.terrain.brush.radius);
+      }
     } else if (tool === 'sculpt-raise') {
       this.terrain.applyBrush(hit.point, this.lastHitPoint || hit.point, isDragging);
       if (!isDragging || Math.random() < 0.15) {
         zenAudio.playMossRustle();
       }
+    } else if (tool === 'sculpt-lower') {
+      this.terrain.applyBrush(hit.point, this.lastHitPoint || hit.point, isDragging);
     } else {
-      // Other terrain tools (sculpt-lower, water-pool)
       this.terrain.applyBrush(hit.point, this.lastHitPoint || hit.point, isDragging);
     }
   }

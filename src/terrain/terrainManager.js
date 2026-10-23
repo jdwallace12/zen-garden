@@ -16,7 +16,7 @@ export class TerrainManager {
 
     // Brush settings
     this.brush = {
-      tool: 'sculpt-raise', // 'sculpt-raise', 'sculpt-lower', 'smooth', 'paint-moss', 'paint-sand', 'water-pool'
+      tool: 'sculpt-raise', // 'sculpt-raise', 'sculpt-lower', 'smooth', 'rake-sand'
       radius: 3.2,
       strength: 0.5
     };
@@ -105,8 +105,8 @@ export class TerrainManager {
     this.material = new THREE.MeshStandardMaterial({
       map: this.sandTexture,
       normalMap: this.normalTexture,
-      normalScale: new THREE.Vector2(0.8, 0.8),
-      roughness: 0.90,
+      normalScale: new THREE.Vector2(1.6, 1.6),
+      roughness: 0.88,
       metalness: 0.04,
       flatShading: false
     });
@@ -287,19 +287,19 @@ export class TerrainManager {
     this.borders = frameGroup;
   }
 
-  // World coordinate to canvas UV pixel coordinates
+  // World coordinate to canvas UV pixel coordinates (matching Three.js flipY = true)
   worldToCanvas(worldX, worldZ) {
     const u = (worldX / this.size) + 0.5;
     const v = (worldZ / this.size) + 0.5;
     return {
       x: Math.floor(THREE.MathUtils.clamp(u, 0, 1) * this.texResolution),
-      y: Math.floor(THREE.MathUtils.clamp(v, 0, 1) * this.texResolution)
+      y: Math.floor(THREE.MathUtils.clamp(1.0 - v, 0, 1) * this.texResolution)
     };
   }
 
   canvasToWorld(cx, cy) {
     const u = cx / this.texResolution;
-    const v = cy / this.texResolution;
+    const v = 1.0 - (cy / this.texResolution);
     return {
       x: (u - 0.5) * this.size,
       z: (v - 0.5) * this.size
@@ -322,6 +322,9 @@ export class TerrainManager {
       case 'smooth':
         this.smoothTerrain(point, radius, strength * 0.35);
         break;
+      case 'rake-sand':
+        this.rakeSand(point, radius, strength);
+        break;
       case 'paint-moss':
         this.paintSurface(point, radius, 'moss', strength);
         break;
@@ -331,7 +334,178 @@ export class TerrainManager {
       case 'water-pool':
         this.carveWaterPool(point, radius, strength);
         break;
+      default:
+        this.deformTerrain(point, radius, strength * 0.15);
+        break;
     }
+  }
+
+  // Rake sand in parallel vertical lines
+  rakeSand(center, radius, strength) {
+    const cp = this.worldToCanvas(center.x, center.z);
+    const radiusPx = (radius / this.size) * this.texResolution;
+
+    const minX = Math.max(0, Math.floor(cp.x - radiusPx));
+    const maxX = Math.min(this.texResolution - 1, Math.ceil(cp.x + radiusPx));
+    const minY = Math.max(0, Math.floor(cp.y - radiusPx));
+    const maxY = Math.min(this.texResolution - 1, Math.ceil(cp.y + radiusPx));
+
+    const w = maxX - minX + 1;
+    const h = maxY - minY + 1;
+    if (w <= 0 || h <= 0) return;
+
+    const diffuseImg = this.ctx.getImageData(minX, minY, w, h);
+    const normalImg = this.normalCtx.getImageData(minX, minY, w, h);
+    const dData = diffuseImg.data;
+    const nData = normalImg.data;
+
+    // Line spacing: ~32cm between vertical ridges for bold, clearly visible furrows
+    const lineSpacing = 0.32;
+    const freq = (Math.PI * 2) / lineSpacing;
+    const radPxSq = radiusPx * radiusPx;
+
+    // Precalculate target values per column for vertical lines
+    const colR = new Float32Array(w);
+    const colG = new Float32Array(w);
+    const colB = new Float32Array(w);
+    const colNormR = new Uint8Array(w);
+    const colNormB = new Uint8Array(w);
+
+    for (let lx = 0; lx < w; lx++) {
+      const gx = minX + lx;
+      const worldX = (gx / this.texResolution - 0.5) * this.size;
+      const phase = freq * worldX;
+      const wave = Math.sin(phase);
+      const cosWave = Math.cos(phase);
+
+      const ridge = wave * 0.5 + 0.5;
+      // High contrast: dark warm furrow shadow to bright sunlit crest
+      colR[lx] = 160 + ridge * 92;
+      colG[lx] = 144 + ridge * 102;
+      colB[lx] = 115 + ridge * 120;
+
+      // Steep normal vector slope for pronounced 3D shading
+      const nx = -1.5 * cosWave;
+      const nz = 1.0;
+      const invLen = 1.0 / Math.hypot(nx, nz);
+      colNormR[lx] = Math.round((nx * invLen * 0.5 + 0.5) * 255);
+      colNormB[lx] = Math.round((nz * invLen * 0.5 + 0.5) * 255);
+    }
+
+    const blendRate = Math.min(1.0, strength * 0.95);
+
+    for (let ly = 0; ly < h; ly++) {
+      const gy = minY + ly;
+      const dy = gy - cp.y;
+      const dySq = dy * dy;
+
+      for (let lx = 0; lx < w; lx++) {
+        const dx = (minX + lx) - cp.x;
+        const distSq = dx * dx + dySq;
+        if (distSq < radPxSq) {
+          const dist = Math.sqrt(distSq);
+          const falloff = 0.5 * (1 + Math.cos((dist / radiusPx) * Math.PI));
+          const factor = blendRate * falloff;
+
+          const idx = (ly * w + lx) * 4;
+          const grain = (Math.random() - 0.5) * 4;
+
+          // Diffuse color blend
+          dData[idx] = dData[idx] + (colR[lx] + grain - dData[idx]) * factor;
+          dData[idx + 1] = dData[idx + 1] + (colG[lx] + grain - dData[idx + 1]) * factor;
+          dData[idx + 2] = dData[idx + 2] + (colB[lx] + grain - dData[idx + 2]) * factor;
+
+          // Normal map blend
+          nData[idx] = nData[idx] + (colNormR[lx] - nData[idx]) * factor;
+          nData[idx + 1] = nData[idx + 1] + (128 - nData[idx + 1]) * factor;
+          nData[idx + 2] = nData[idx + 2] + (colNormB[lx] - nData[idx + 2]) * factor;
+        }
+      }
+    }
+
+    this.ctx.putImageData(diffuseImg, minX, minY);
+    this.normalCtx.putImageData(normalImg, minX, minY);
+
+    this.sandTexture.needsUpdate = true;
+    this.normalTexture.needsUpdate = true;
+
+    // Carve physical 3D ridges and furrows into terrain geometry
+    const pos = this.geometry.attributes.position;
+    let modified = false;
+    for (let i = 0; i < pos.count; i++) {
+      const vx = pos.getX(i);
+      const vz = pos.getZ(i);
+      const dist = Math.hypot(vx - center.x, vz - center.z);
+      if (dist < radius) {
+        const falloff = 0.5 * (1 + Math.cos((dist / radius) * Math.PI));
+        const curY = pos.getY(i);
+        const targetY = Math.sin(freq * vx) * 0.038 * Math.min(1.0, strength * 1.2);
+        pos.setY(i, THREE.MathUtils.lerp(curY, targetY, 0.45 * strength * falloff));
+        modified = true;
+      }
+    }
+    if (modified) {
+      pos.needsUpdate = true;
+      this.geometry.computeVertexNormals();
+    }
+  }
+
+  // Rake the entire sand canvas in uniform vertical lines
+  rakeAllSand() {
+    const w = this.texResolution;
+    const h = this.texResolution;
+    const diffuseImg = this.ctx.getImageData(0, 0, w, h);
+    const normalImg = this.normalCtx.getImageData(0, 0, w, h);
+    const dData = diffuseImg.data;
+    const nData = normalImg.data;
+
+    const lineSpacing = 0.22;
+    const freq = (Math.PI * 2) / lineSpacing;
+
+    const colR = new Float32Array(w);
+    const colG = new Float32Array(w);
+    const colB = new Float32Array(w);
+    const colNormR = new Uint8Array(w);
+    const colNormB = new Uint8Array(w);
+
+    for (let x = 0; x < w; x++) {
+      const worldX = (x / w - 0.5) * this.size;
+      const phase = freq * worldX;
+      const wave = Math.sin(phase);
+      const cosWave = Math.cos(phase);
+
+      const ridge = wave * 0.5 + 0.5;
+      colR[x] = 202 + ridge * 40;
+      colG[x] = 189 + ridge * 38;
+      colB[x] = 163 + ridge * 36;
+
+      const nx = -0.75 * cosWave;
+      const nz = 1.0;
+      const invLen = 1.0 / Math.hypot(nx, nz);
+      colNormR[x] = Math.round((nx * invLen * 0.5 + 0.5) * 255);
+      colNormB[x] = Math.round((nz * invLen * 0.5 + 0.5) * 255);
+    }
+
+    for (let y = 0; y < h; y++) {
+      const rowIdx = y * w * 4;
+      for (let x = 0; x < w; x++) {
+        const idx = rowIdx + x * 4;
+        const grain = (Math.random() - 0.5) * 5;
+        dData[idx] = Math.min(255, Math.max(0, colR[x] + grain));
+        dData[idx + 1] = Math.min(255, Math.max(0, colG[x] + grain));
+        dData[idx + 2] = Math.min(255, Math.max(0, colB[x] + grain));
+
+        nData[idx] = colNormR[x];
+        nData[idx + 1] = 128;
+        nData[idx + 2] = colNormB[x];
+      }
+    }
+
+    this.ctx.putImageData(diffuseImg, 0, 0);
+    this.normalCtx.putImageData(normalImg, 0, 0);
+
+    this.sandTexture.needsUpdate = true;
+    this.normalTexture.needsUpdate = true;
   }
 
   // Nest placed stone in moss bedding if requested
@@ -385,7 +559,7 @@ export class TerrainManager {
     }
   }
 
-  // 4. Smooth / Level Brush
+  // 4. Smooth / Level Brush (levels terrain & removes raked lines)
   smoothTerrain(center, radius, strength) {
     const pos = this.geometry.attributes.position;
     const indicesInBrush = [];
@@ -406,14 +580,73 @@ export class TerrainManager {
       for (const item of indicesInBrush) {
         const falloff = 0.5 * (1 + Math.cos((item.dist / radius) * Math.PI));
         const curY = pos.getY(item.index);
-        pos.setY(item.index, curY + (avgY - curY) * strength * falloff);
+        const targetY = Math.abs(avgY) < 0.06 ? 0.0 : avgY;
+        pos.setY(item.index, curY + (targetY - curY) * strength * falloff);
       }
       pos.needsUpdate = true;
       this.geometry.computeVertexNormals();
     }
 
-    // Also smooth sand texture towards base sand color
-    this.paintSurface(center, radius, 'smooth-sand', strength * 0.4);
+    // Smooth away raked lines and restore pristine smooth sand
+    const cp = this.worldToCanvas(center.x, center.z);
+    const radiusPx = (radius / this.size) * this.texResolution;
+
+    const minX = Math.max(0, Math.floor(cp.x - radiusPx));
+    const maxX = Math.min(this.texResolution - 1, Math.ceil(cp.x + radiusPx));
+    const minY = Math.max(0, Math.floor(cp.y - radiusPx));
+    const maxY = Math.min(this.texResolution - 1, Math.ceil(cp.y + radiusPx));
+
+    const w = maxX - minX + 1;
+    const h = maxY - minY + 1;
+    if (w <= 0 || h <= 0) return;
+
+    const diffuseImg = this.ctx.getImageData(minX, minY, w, h);
+    const normalImg = this.normalCtx.getImageData(minX, minY, w, h);
+    const dData = diffuseImg.data;
+    const nData = normalImg.data;
+
+    const radPxSq = radiusPx * radiusPx;
+    const blendRate = Math.min(1.0, strength * 0.95);
+
+    // Warm pristine sand base color
+    const baseR = 232;
+    const baseG = 224;
+    const baseB = 208;
+
+    for (let ly = 0; ly < h; ly++) {
+      const gy = minY + ly;
+      const dy = gy - cp.y;
+      const dySq = dy * dy;
+
+      for (let lx = 0; lx < w; lx++) {
+        const dx = (minX + lx) - cp.x;
+        const distSq = dx * dx + dySq;
+        if (distSq < radPxSq) {
+          const dist = Math.sqrt(distSq);
+          const falloff = 0.5 * (1 + Math.cos((dist / radiusPx) * Math.PI));
+          const factor = blendRate * falloff;
+
+          const idx = (ly * w + lx) * 4;
+          const grain = (Math.random() - 0.5) * 5;
+
+          // Restore smooth flat sand diffuse
+          dData[idx] = dData[idx] + (baseR + grain - dData[idx]) * factor;
+          dData[idx + 1] = dData[idx + 1] + (baseG + grain - dData[idx + 1]) * factor;
+          dData[idx + 2] = dData[idx + 2] + (baseB + grain - dData[idx + 2]) * factor;
+
+          // Restore flat tangent normal: (128, 128, 255) to erase ridges
+          nData[idx] = nData[idx] + (128 - nData[idx]) * factor;
+          nData[idx + 1] = nData[idx + 1] + (128 - nData[idx + 1]) * factor;
+          nData[idx + 2] = nData[idx + 2] + (255 - nData[idx + 2]) * factor;
+        }
+      }
+    }
+
+    this.ctx.putImageData(diffuseImg, minX, minY);
+    this.normalCtx.putImageData(normalImg, minX, minY);
+
+    this.sandTexture.needsUpdate = true;
+    this.normalTexture.needsUpdate = true;
   }
 
   // 5. Paint Surface (Lush Green Moss or Pure White Sand)
@@ -620,6 +853,7 @@ export class TerrainManager {
     const pos = this.geometry.attributes.position;
     const heightSnapshot = new Float32Array(pos.array);
     const imgData = this.ctx.getImageData(0, 0, this.texResolution, this.texResolution);
+    const normalData = this.normalCtx.getImageData(0, 0, this.texResolution, this.texResolution);
 
     if (this.historyIndex < this.history.length - 1) {
       this.history = this.history.slice(0, this.historyIndex + 1);
@@ -627,7 +861,8 @@ export class TerrainManager {
 
     this.history.push({
       heights: heightSnapshot,
-      imgData: imgData
+      imgData: imgData,
+      normalData: normalData
     });
 
     if (this.history.length > this.maxHistory) {
@@ -664,5 +899,10 @@ export class TerrainManager {
 
     this.ctx.putImageData(state.imgData, 0, 0);
     this.sandTexture.needsUpdate = true;
+
+    if (state.normalData) {
+      this.normalCtx.putImageData(state.normalData, 0, 0);
+      this.normalTexture.needsUpdate = true;
+    }
   }
 }
