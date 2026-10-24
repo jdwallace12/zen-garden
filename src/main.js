@@ -554,6 +554,7 @@ class ZenGardenApp {
           'sculpt-raise': 'Click & drag to raise lush moss mounds and rolling hills.',
           'sculpt-lower': 'Click & drag to lower terrain and carve depressions.',
           'smooth': 'Click & drag to gently level and blend the terrain.',
+          'paint-moss': 'Click & drag to paint lush green moss onto the terrain.',
           'rake-sand': 'Click & drag to rake the sand in serene vertical lines.'
         };
         this.updateHint(hints[btn.dataset.tool] || 'Drag on terrain to carve.');
@@ -886,8 +887,43 @@ class ZenGardenApp {
 
   applyCurrentTool(hit, isDragging = false) {
     const tool = this.terrain.brush.tool;
+ if (tool === 'paint-moss') {
+  const dist = this.lastHitPoint
+    ? this.lastHitPoint.distanceTo(hit.point)
+    : 0.08;
 
-    if (tool === 'rake-sand') {
+  const isTerrainHit = hit.object === this.terrain.mesh;
+
+  if (isTerrainHit) {
+    // Keep the existing green texture and raised ground effect.
+    this.terrain.paintSurface(
+      hit.point,
+      this.terrain.brush.radius,
+      'moss',
+      this.terrain.brush.strength
+    );
+
+    // Actually place visible 3D moss cushions on the ground.
+    if (this.mossManager) {
+      this.mossManager.growGroundMossBeds(
+        hit.point,
+        this.terrain.brush.radius,
+        this.terrain,
+        6
+      );
+    }
+  } else if (this.mossManager) {
+    // Place moss on rocks or other non-terrain surfaces.
+    this.mossManager.growMossOnRock(
+      hit,
+      this.terrain.brush.radius
+    );
+  }
+
+  zenAudio.setRakeIntensity(
+    Math.min(2.0, Math.max(0.4, dist * 6.0))
+  );
+ } else if (tool === 'rake-sand') {
       const dist = this.lastHitPoint ? this.lastHitPoint.distanceTo(hit.point) : 0.08;
       this.terrain.rakeSand(hit.point, this.terrain.brush.radius, this.terrain.brush.strength);
       if (this.mossManager) {

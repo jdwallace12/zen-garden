@@ -16,7 +16,7 @@ export class TerrainManager {
 
     // Brush settings
     this.brush = {
-      tool: 'sculpt-raise', // 'sculpt-raise', 'sculpt-lower', 'smooth', 'rake-sand'
+      tool: 'sculpt-raise', // 'sculpt-raise', 'sculpt-lower', 'smooth', 'rake-sand', 'paint-moss'
       radius: 3.2,
       strength: 0.5
     };
