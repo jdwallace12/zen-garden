@@ -16,7 +16,7 @@ export class TerrainManager {
 
     // Brush settings
     this.brush = {
-      tool: 'sculpt-raise', // 'sculpt-raise', 'sculpt-lower', 'smooth', 'rake-sand', 'paint-moss'
+      tool: 'sculpt-raise', // 'sculpt-raise', 'sculpt-lower', 'smooth', 'rake-sand', 'paint-moss', 'paint-grass'
       radius: 3.2,
       strength: 0.5
     };
@@ -327,6 +327,9 @@ export class TerrainManager {
         break;
       case 'paint-moss':
         this.paintSurface(point, radius, 'moss', strength);
+        break;
+      case 'paint-grass':
+        this.paintSurface(point, radius, 'grass', strength);
         break;
       case 'paint-sand':
         this.paintSurface(point, radius, 'sand', strength);
@@ -697,6 +700,21 @@ export class TerrainManager {
       // Organic stippling around edges
       this.addOrganicMossSplat(cp.x, cp.y, radiusPx);
       this.addMossNormals(cp.x, cp.y, radiusPx);
+    } else if (type === 'grass') {
+      // Grass: lighter warmer green, no terrain elevation change
+      const grassHue = Math.random() > 0.5 ? 'rgba(95, 148, 56, ' : 'rgba(78, 132, 45, ';
+      grad.addColorStop(0, `${grassHue}${Math.min(1, strength * 0.85)})`);
+      grad.addColorStop(0.35, `rgba(108, 158, 68, ${strength * 0.7})`);
+      grad.addColorStop(0.65, `rgba(120, 170, 75, ${strength * 0.45})`);
+      grad.addColorStop(1, 'rgba(110, 155, 70, 0)');
+
+      this.ctx.fillStyle = grad;
+      this.ctx.beginPath();
+      this.ctx.arc(cp.x, cp.y, radiusPx, 0, Math.PI * 2);
+      this.ctx.fill();
+
+      // Fine organic grass stippling
+      this.addOrganicGrassSplat(cp.x, cp.y, radiusPx);
     } else if (type === 'sand' || type === 'smooth-sand') {
       // Restore sand - gently lower moss cushions back towards baseline
       const pos = this.geometry.attributes.position;
@@ -772,6 +790,27 @@ export class TerrainManager {
       const spotR = (2 + Math.random() * 8) * (rPx / 60);
 
       this.ctx.fillStyle = Math.random() > 0.4 ? 'rgba(68, 105, 52, 0.4)' : 'rgba(92, 138, 70, 0.35)';
+      this.ctx.beginPath();
+      this.ctx.arc(px, py, spotR, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+    this.ctx.restore();
+  }
+
+  addOrganicGrassSplat(cx, cy, rPx) {
+    this.ctx.save();
+    const count = Math.min(24, Math.floor(rPx * 0.4));
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = (0.25 + Math.random() * 0.75) * rPx;
+      const px = cx + Math.cos(angle) * dist;
+      const py = cy + Math.sin(angle) * dist;
+      const spotR = (1.5 + Math.random() * 5) * (rPx / 60);
+
+      // Lighter warm greens, slightly yellowy for grass vs deep emerald moss
+      this.ctx.fillStyle = Math.random() > 0.5
+        ? 'rgba(105, 155, 60, 0.35)'
+        : 'rgba(128, 170, 75, 0.3)';
       this.ctx.beginPath();
       this.ctx.arc(px, py, spotR, 0, Math.PI * 2);
       this.ctx.fill();

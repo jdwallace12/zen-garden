@@ -9,6 +9,7 @@ import { GardenPresets } from './gardenPresets.js';
 import { GardenSerializer } from './gardenSerializer.js';
 import { zenAudio } from './audio/zenAudio.js';
 import { MossManager } from './procedural/mossManager.js';
+import { GrassManager } from './procedural/grassManager.js';
 
 class ZenGardenApp {
   constructor() {
@@ -98,6 +99,7 @@ class ZenGardenApp {
   initTerrain() {
     this.terrain = new TerrainManager(this.scene, 36, 160);
     this.mossManager = new MossManager(this.scene);
+    this.grassManager = new GrassManager(this.scene);
   }
 
   initWeather() {
@@ -382,6 +384,14 @@ class ZenGardenApp {
     this.brushCursorGroup.visible = true;
     const r = this.terrain.brush.radius;
     const isRake = this.terrain.brush.tool === 'rake-sand';
+    const isGrass = this.terrain.brush.tool === 'paint-grass';
+    const isMossTool = this.terrain.brush.tool === 'paint-moss';
+
+    // Choose cursor colour based on active tool
+    let cursorColor = 0xb83324; // default red
+    if (isRake) cursorColor = 0xd49b4d;       // warm gold
+    else if (isGrass) cursorColor = 0x5daa2f;  // vibrant green
+    else if (isMossTool) cursorColor = 0x3d8836; // deep moss green
 
     this.cursorRing.scale.set(r, 1, r);
     if (this.rakeCursorLines) {
@@ -389,10 +399,10 @@ class ZenGardenApp {
       this.rakeCursorLines.visible = isRake;
     }
     if (this.cursorRing.material) {
-      this.cursorRing.material.color.setHex(isRake ? 0xd49b4d : 0xb83324);
+      this.cursorRing.material.color.setHex(cursorColor);
     }
     if (this.cursorDot.material) {
-      this.cursorDot.material.color.setHex(isRake ? 0xd49b4d : 0xb83324);
+      this.cursorDot.material.color.setHex(cursorColor);
     }
 
     this.brushCursorGroup.position.copy(point);
@@ -434,6 +444,9 @@ class ZenGardenApp {
   clearPlacedObjects() {
     if (this.mossManager) {
       this.mossManager.clearAllMoss();
+    }
+    if (this.grassManager) {
+      this.grassManager.clearAllGrass();
     }
     for (const obj of this.placedObjects) {
       this.scene.remove(obj);
@@ -555,6 +568,7 @@ class ZenGardenApp {
           'sculpt-lower': 'Click & drag to lower terrain and carve depressions.',
           'smooth': 'Click & drag to gently level and blend the terrain.',
           'paint-moss': 'Click & drag to paint lush green moss onto the terrain.',
+          'paint-grass': 'Click & drag to paint swaying grass blades onto the terrain.',
           'rake-sand': 'Click & drag to rake the sand in serene vertical lines.'
         };
         this.updateHint(hints[btn.dataset.tool] || 'Drag on terrain to carve.');
@@ -923,17 +937,45 @@ class ZenGardenApp {
   zenAudio.setRakeIntensity(
     Math.min(2.0, Math.max(0.4, dist * 6.0))
   );
+ } else if (tool === 'paint-grass') {
+      // Paint grass texture underlay on the terrain canvas
+      this.terrain.paintSurface(
+        hit.point,
+        this.terrain.brush.radius,
+        'grass',
+        this.terrain.brush.strength
+      );
+
+      // Scatter 3D instanced grass blades
+      if (this.grassManager) {
+        this.grassManager.paintGrassBlades(
+          hit.point,
+          this.terrain.brush.radius,
+          this.terrain,
+          Math.floor(18 * this.terrain.brush.strength)
+        );
+      }
+
+      zenAudio.setRakeIntensity(
+        Math.min(1.5, Math.max(0.3, (this.lastHitPoint ? this.lastHitPoint.distanceTo(hit.point) : 0.08) * 5.0))
+      );
  } else if (tool === 'rake-sand') {
       const dist = this.lastHitPoint ? this.lastHitPoint.distanceTo(hit.point) : 0.08;
       this.terrain.rakeSand(hit.point, this.terrain.brush.radius, this.terrain.brush.strength);
       if (this.mossManager) {
         this.mossManager.pruneMossAt(hit.point, this.terrain.brush.radius);
       }
+      if (this.grassManager) {
+        this.grassManager.pruneGrassAt(hit.point, this.terrain.brush.radius);
+      }
       zenAudio.setRakeIntensity(Math.min(2.0, Math.max(0.4, dist * 6.0)));
     } else if (tool === 'smooth') {
       this.terrain.applyBrush(hit.point, this.lastHitPoint || hit.point, isDragging);
       if (this.mossManager) {
         this.mossManager.pruneMossAt(hit.point, this.terrain.brush.radius);
+      }
+      if (this.grassManager) {
+        this.grassManager.pruneGrassAt(hit.point, this.terrain.brush.radius);
       }
     } else if (tool === 'sculpt-raise') {
       this.terrain.applyBrush(hit.point, this.lastHitPoint || hit.point, isDragging);
@@ -1159,6 +1201,7 @@ class ZenGardenApp {
     this.controls.update();
     this.weather.update(elapsedTime, dt);
     decorationGenerator.update(elapsedTime, dt);
+    if (this.grassManager) this.grassManager.update(elapsedTime, dt);
 
     // Subtle breathing pulsation on the placement ghost ground halo
     if (this.ghostPreviewGroup && this.ghostPreviewGroup.visible && this.ghostRingMat) {
