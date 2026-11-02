@@ -98,6 +98,7 @@ class ZenGardenApp {
 
   initTerrain() {
     this.terrain = new TerrainManager(this.scene, 36, 160);
+    decorationGenerator.setTerrainManager(this.terrain);
     this.mossManager = new MossManager(this.scene);
     this.grassManager = new GrassManager(this.scene);
   }
@@ -246,7 +247,7 @@ class ZenGardenApp {
     return ghostMat;
   }
 
-  instantiateElementMesh(category, id, type, scale = 1.0, isPreview = false) {
+  instantiateElementMesh(category, id, type, scale = 1.0, isPreview = false, spawnPos = null) {
     let newObj = null;
     const isAnimated = !isPreview;
 
@@ -270,7 +271,8 @@ class ZenGardenApp {
       else if (id === 'shishi') newObj = decorationGenerator.createShishiOdoshi(scale, isAnimated);
       else if (id === 'tsukubai') newObj = decorationGenerator.createTsukubai(scale);
       else if (id === 'koi') {
-        newObj = decorationGenerator.createKoiFish(new THREE.Vector3(0, 0, 0), 3.0 * scale, isAnimated);
+        const initialPos = spawnPos ? spawnPos.clone() : new THREE.Vector3(0, -0.24, 0);
+        newObj = decorationGenerator.createKoiFish(initialPos, 3.0 * scale, isAnimated);
       }
     }
     return newObj;
@@ -366,6 +368,23 @@ class ZenGardenApp {
       this.brushCursorGroup.visible = false;
       if (this.ghostPreviewGroup) {
         this.ghostPreviewGroup.visible = true;
+
+        const isKoi = this.selectedElement && this.selectedElement.id === 'koi';
+        const terrainH = this.terrain.getHeightAt(point.x, point.z);
+        const isInWater = terrainH < -0.175;
+
+        if (isKoi) {
+          if (!isInWater) {
+            this.updateHint('⚠️ Hover over water to place Koi Fish (carve a pond first with the Lower or Pool tool).');
+            if (this.ghostRingMat) this.ghostRingMat.color.setHex(0xef4444);
+          } else {
+            this.updateHint('Click in water to place Koi Fish.');
+            if (this.ghostRingMat) this.ghostRingMat.color.setHex(0x328ea8);
+          }
+        } else {
+          if (this.ghostRingMat) this.ghostRingMat.color.setHex(0x5eead4);
+        }
+
         const placeY = this.calculateElementPlacementY(
           point,
           this.selectedElement ? this.selectedElement.id : null,
@@ -418,7 +437,7 @@ class ZenGardenApp {
 
   // Placed Objects Management
   addPlacedObject(mesh, metadata = {}) {
-    mesh.userData = metadata;
+    mesh.userData = { ...(mesh.userData || {}), ...metadata };
     this.scene.add(mesh);
     this.placedObjects.push(mesh);
     zenAudio.playPlacementThud();
@@ -433,6 +452,7 @@ class ZenGardenApp {
     const idx = this.placedObjects.indexOf(current);
     if (idx !== -1) {
       this.mossManager.removeMossForObject(current);
+      decorationGenerator.removeAnimated(current);
       this.scene.remove(current);
       this.placedObjects.splice(idx, 1);
       zenAudio.playPlacementThud();
@@ -442,6 +462,7 @@ class ZenGardenApp {
   }
 
   clearPlacedObjects() {
+    decorationGenerator.clearAllAnimated();
     if (this.mossManager) {
       this.mossManager.clearAllMoss();
     }
@@ -1009,7 +1030,7 @@ class ZenGardenApp {
   calculateElementPlacementY(point, id, scale = 1.0, rotation = 0) {
     const terrainY = this.terrain.getHeightAt(point.x, point.z);
     if (id === 'koi') {
-      return Math.min(-0.16, terrainY - 0.02);
+      return THREE.MathUtils.clamp(-0.24, terrainY + 0.05, -0.19);
     }
     if (id === 'bridge') {
       // Sample terrain height at the two bridge landing banks along its orientation
@@ -1033,12 +1054,33 @@ class ZenGardenApp {
   placeCurrentElement(point) {
     const { category, id, type } = this.selectedElement;
     const scale = this.elementScale;
-    const newObj = this.instantiateElementMesh(category, id, type, scale, false);
+
+    // Koi fish placement validation: must be placed in submerged water
+    if (id === 'koi') {
+      const terrainH = this.terrain.getHeightAt(point.x, point.z);
+      if (terrainH >= -0.165) {
+        this.updateHint('⚠️ Koi fish must be placed in water! Carve a pond first with the Lower or Pool tool.');
+        zenAudio.playPlacementThud();
+        return;
+      }
+    }
+
+    const placeY = this.calculateElementPlacementY(point, id, scale, this.elementRotation);
+    const spawnPos = new THREE.Vector3(point.x, placeY, point.z);
+
+    // isPreview = false -> isAnimated = true!
+    const newObj = this.instantiateElementMesh(category, id, type, scale, false, spawnPos);
 
     if (newObj) {
-      const placeY = this.calculateElementPlacementY(point, id, scale, this.elementRotation);
       newObj.position.set(point.x, placeY, point.z);
       newObj.rotation.y = this.elementRotation;
+
+      // Synchronize swimming initial position and home patrol center for koi
+      if (newObj.userData && newObj.userData.koiState) {
+        newObj.userData.koiState.pos.set(point.x, placeY, point.z);
+        newObj.userData.koiState.centerPos.set(point.x, placeY, point.z);
+        newObj.userData.koiState.currentY = placeY;
+      }
 
       this.addPlacedObject(newObj, { category, id, scale, rotation: this.elementRotation });
 

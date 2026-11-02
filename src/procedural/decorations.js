@@ -578,34 +578,164 @@ export class DecorationGenerator {
     fishGroup.position.copy(centerPos);
     fishGroup.scale.setScalar(1.1);
 
-    // Swimming animation state
+    // Autonomous swimming animation with water-boundary awareness
     if (isAnimated) {
-      let angle = Math.random() * Math.PI * 2;
-      const speed = 0.5 + Math.random() * 0.2;
-      const baseRadius = Math.max(1.8, radius);
+      const koiState = {
+        pos: centerPos.clone(),
+        centerPos: centerPos.clone(),
+        heading: Math.random() * Math.PI * 2,
+        speed: 0.52 + Math.random() * 0.22,
+        wanderTimer: 0.5 + Math.random() * 2.0,
+        targetWanderTurn: 0,
+        patrolRadius: Math.max(1.8, radius),
+        currentY: centerPos.y || -0.24
+      };
+
+      fishGroup.userData.koiState = koiState;
 
       this.animatedDecorations.push({
         type: 'koi',
+        mesh: fishGroup,
         update: (time, dt) => {
-          // Natural meandering patrol path (slight organic radius oscillation)
-          const currentR = baseRadius * (0.85 + 0.15 * Math.sin(angle * 2.0));
-          angle += (speed / currentR) * dt;
+          const tm = this.terrainManager;
+          let steer = 0;
 
-          const posX = centerPos.x + Math.cos(angle) * currentR;
-          const posZ = centerPos.z + Math.sin(angle) * currentR;
-          const posY = centerPos.y + Math.sin(time * 1.6) * 0.02;
+          if (tm) {
+            // Water surface is at y = -0.16. Safe water depth for koi is terrain < -0.165.
+            const SHORE_THRESHOLD = -0.165;
 
-          fishGroup.position.set(posX, posY, posZ);
+            // 1. Look-ahead feelers to detect pond banks and water edges
+            const lookAheadDist = Math.min(0.65, 0.45 * fishGroup.scale.x);
+            const feelerAngle = 0.52; // ~30 degrees
 
-          // Heading tangent: koi swims facing forward along path
-          const tangentAngle = Math.atan2(
-            -Math.sin(angle),
-            Math.cos(angle)
-          );
-          fishGroup.rotation.y = tangentAngle;
+            // Center feeler
+            const fcX = koiState.pos.x + Math.cos(koiState.heading) * lookAheadDist;
+            const fcZ = koiState.pos.z + Math.sin(koiState.heading) * lookAheadDist;
+            const hCenter = tm.getHeightAt(fcX, fcZ);
+
+            // Left feeler
+            const flX = koiState.pos.x + Math.cos(koiState.heading + feelerAngle) * (lookAheadDist * 0.8);
+            const flZ = koiState.pos.z + Math.sin(koiState.heading + feelerAngle) * (lookAheadDist * 0.8);
+            const hLeft = tm.getHeightAt(flX, flZ);
+
+            // Right feeler
+            const frX = koiState.pos.x + Math.cos(koiState.heading - feelerAngle) * (lookAheadDist * 0.8);
+            const frZ = koiState.pos.z + Math.sin(koiState.heading - feelerAngle) * (lookAheadDist * 0.8);
+            const hRight = tm.getHeightAt(frX, frZ);
+
+            // Steer away from shores and shallow water
+            if (hCenter >= SHORE_THRESHOLD) {
+              // Shore directly ahead! Steer decisively toward deeper water
+              if (hLeft < hRight) {
+                steer = 4.2; // Turn left into deeper water
+              } else if (hRight < hLeft) {
+                steer = -4.2; // Turn right into deeper water
+              } else {
+                steer = 4.8; // Both shallow, make sharp turn
+              }
+            } else if (hLeft >= SHORE_THRESHOLD) {
+              // Left side approaching bank, steer right
+              steer = -2.6;
+            } else if (hRight >= SHORE_THRESHOLD) {
+              // Right side approaching bank, steer left
+              steer = 2.6;
+            } else {
+              // Safe open water: gentle organic wandering
+              koiState.wanderTimer -= dt;
+              if (koiState.wanderTimer <= 0) {
+                koiState.wanderTimer = 1.6 + Math.random() * 2.5;
+                koiState.targetWanderTurn = (Math.random() - 0.5) * 1.3;
+              }
+              steer = koiState.targetWanderTurn || 0;
+
+              // Soft tether to patrol home pond if straying too far
+              const distFromHome = Math.hypot(koiState.pos.x - koiState.centerPos.x, koiState.pos.z - koiState.centerPos.z);
+              if (distFromHome > koiState.patrolRadius * 1.4) {
+                const toHomeAngle = Math.atan2(koiState.centerPos.z - koiState.pos.z, koiState.centerPos.x - koiState.pos.x);
+                let angleDiff = toHomeAngle - koiState.heading;
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                steer += angleDiff * 1.2;
+              }
+            }
+
+            // 2. Emergency shoreline gradient push if fish is currently near bank
+            const currentH = tm.getHeightAt(koiState.pos.x, koiState.pos.z);
+            if (currentH >= SHORE_THRESHOLD) {
+              const delta = 0.25;
+              const dhdx = tm.getHeightAt(koiState.pos.x + delta, koiState.pos.z) - tm.getHeightAt(koiState.pos.x - delta, koiState.pos.z);
+              const dhdz = tm.getHeightAt(koiState.pos.x, koiState.pos.z + delta) - tm.getHeightAt(koiState.pos.x, koiState.pos.z - delta);
+              const gradLen = Math.hypot(dhdx, dhdz);
+              if (gradLen > 0.001) {
+                const deepAngle = Math.atan2(-dhdz, -dhdx);
+                let diff = deepAngle - koiState.heading;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                steer = diff * 5.0;
+
+                // Nudge position directly towards deeper water
+                koiState.pos.x += (-dhdx / gradLen) * 0.75 * dt;
+                koiState.pos.z += (-dhdz / gradLen) * 0.75 * dt;
+              }
+            }
+
+            // 3. Integrate rotation & candidate motion
+            koiState.heading += THREE.MathUtils.clamp(steer, -4.5, 4.5) * dt;
+
+            const nextX = koiState.pos.x + Math.cos(koiState.heading) * koiState.speed * dt;
+            const nextZ = koiState.pos.z + Math.sin(koiState.heading) * koiState.speed * dt;
+            const nextH = tm.getHeightAt(nextX, nextZ);
+
+            // STRICT COLLISION AVOIDANCE: Only step forward if next position is submerged!
+            if (nextH < SHORE_THRESHOLD) {
+              koiState.pos.x = nextX;
+              koiState.pos.z = nextZ;
+            } else {
+              // Hit bank: turn heading towards deeper water and try alternative step
+              const turnDir = (hLeft < hRight) ? 1 : -1;
+              koiState.heading += turnDir * (Math.PI * 0.45);
+              const altX = koiState.pos.x + Math.cos(koiState.heading) * (koiState.speed * 0.6) * dt;
+              const altZ = koiState.pos.z + Math.sin(koiState.heading) * (koiState.speed * 0.6) * dt;
+              if (tm.getHeightAt(altX, altZ) < SHORE_THRESHOLD) {
+                koiState.pos.x = altX;
+                koiState.pos.z = altZ;
+              }
+            }
+
+            // Sandbox perimeter bounds clamp
+            const halfBox = (tm.size / 2) - 0.9;
+            koiState.pos.x = THREE.MathUtils.clamp(koiState.pos.x, -halfBox, halfBox);
+            koiState.pos.z = THREE.MathUtils.clamp(koiState.pos.z, -halfBox, halfBox);
+
+            // 4. Vertical depth control (submerged beneath water, above pond bottom)
+            const bedH = tm.getHeightAt(koiState.pos.x, koiState.pos.z);
+            const targetY = THREE.MathUtils.clamp(-0.24, bedH + 0.05, -0.19);
+            koiState.currentY = THREE.MathUtils.lerp(koiState.currentY, targetY, 4.0 * dt);
+            const swimY = koiState.currentY + Math.sin(time * 2.2 + koiState.heading) * 0.012;
+
+            fishGroup.position.set(koiState.pos.x, swimY, koiState.pos.z);
+
+            // Forward heading (model faces +Z in local coordinates)
+            const vx = Math.cos(koiState.heading);
+            const vz = Math.sin(koiState.heading);
+            fishGroup.rotation.y = Math.atan2(vx, vz);
+
+            // Gentle banking roll into turns
+            fishGroup.rotation.z = THREE.MathUtils.clamp(-steer * 0.06, -0.22, 0.22);
+          } else {
+            // Fallback circular orbit if terrain not yet initialized
+            const currentR = koiState.patrolRadius * (0.85 + 0.15 * Math.sin(time * 0.5));
+            koiState.heading += (koiState.speed / currentR) * dt;
+            fishGroup.position.set(
+              centerPos.x + Math.cos(koiState.heading) * currentR,
+              centerPos.y + Math.sin(time * 1.6) * 0.02,
+              centerPos.z + Math.sin(koiState.heading) * currentR
+            );
+            fishGroup.rotation.y = Math.atan2(-Math.sin(koiState.heading), Math.cos(koiState.heading));
+          }
 
           // --- Sinuous vertebral swimming wave ---
-          const swimFreq = time * 4.5;
+          const swimFreq = time * 4.5 * (koiState.speed / 0.6);
 
           // Head gently sways
           headMesh.rotation.y = Math.sin(swimFreq) * 0.08;
@@ -623,9 +753,6 @@ export class DecorationGenerator {
           const pecFlap = Math.sin(swimFreq) * 0.22;
           leftPec.rotation.z = -0.3 + pecFlap;
           rightPec.rotation.z = 0.3 - pecFlap;
-
-          // Subtle body roll into turns
-          fishGroup.rotation.z = Math.sin(swimFreq) * 0.05;
         }
       });
     }
@@ -1052,6 +1179,26 @@ export class DecorationGenerator {
 
     group.scale.setScalar(scale);
     return group;
+  }
+
+  setTerrainManager(terrainManager) {
+    this.terrainManager = terrainManager;
+  }
+
+  removeAnimated(mesh) {
+    this.animatedDecorations = this.animatedDecorations.filter(item => {
+      if (!item.mesh) return true;
+      let cur = item.mesh;
+      while (cur) {
+        if (cur === mesh) return false;
+        cur = cur.parent;
+      }
+      return true;
+    });
+  }
+
+  clearAllAnimated() {
+    this.animatedDecorations = [];
   }
 
   update(time, dt) {
