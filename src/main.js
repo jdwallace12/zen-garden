@@ -1042,16 +1042,28 @@ class ZenGardenApp {
 
       this.addPlacedObject(newObj, { category, id, scale, rotation: this.elementRotation });
 
-      // Automatically nest stone or azalea shrub in traditional moss bedding
+      // Automatically nest stones and planted flora in lush green moss bedding
       // (Exclude stepping stones and bridges so clean paths and ponds remain intact)
-      const isAzalea = typeof id === 'string' && id.startsWith('azalea');
+      const isFlora = category === 'flora' || type === 'tree' || type === 'shrub';
+      const isRock = category === 'rocks';
       const isStepping = id === 'stepping' || id === 'stepping-path';
       const isBridge = id === 'bridge';
-      if (this.autoMoss && !isStepping && !isBridge && (category === 'rocks' || isAzalea)) {
-        const mossR = (isAzalea ? 1.3 : 1.6) * scale;
+
+      if (this.autoMoss && !isStepping && !isBridge && (isRock || isFlora)) {
+        let mossR;
+        let bedCount;
+        if (isFlora) {
+          const isShrub = type === 'shrub' || (typeof id === 'string' && id.startsWith('azalea'));
+          mossR = (isShrub ? 1.4 : 2.0) * scale;
+          bedCount = isShrub ? 3 : 5;
+        } else {
+          mossR = 1.6 * scale;
+          bedCount = 2;
+        }
+
         this.terrain.nestStoneInMoss(point.x, point.z, mossR);
         if (this.mossManager) {
-          this.mossManager.growGroundMossBeds(point, (isAzalea ? 0.95 : 1.2) * scale, this.terrain, 2);
+          this.mossManager.growGroundMossBeds(point, mossR * 0.75, this.terrain, bedCount);
         }
       }
     }

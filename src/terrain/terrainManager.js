@@ -701,7 +701,27 @@ export class TerrainManager {
       this.addOrganicMossSplat(cp.x, cp.y, radiusPx);
       this.addMossNormals(cp.x, cp.y, radiusPx);
     } else if (type === 'grass') {
-      // Grass: lighter warmer green, no terrain elevation change
+      // Elevate terrain vertices under grass brush to form a gentle turf / sod mound
+      const pos = this.geometry.attributes.position;
+      let modified = false;
+      for (let i = 0; i < pos.count; i++) {
+        const vx = pos.getX(i);
+        const vz = pos.getZ(i);
+        const dist = Math.hypot(vx - center.x, vz - center.z);
+        if (dist < radius) {
+          const falloff = 0.5 * (1 + Math.cos((dist / radius) * Math.PI));
+          const curY = pos.getY(i);
+          pos.setY(i, curY + 0.035 * strength * falloff);
+          modified = true;
+        }
+      }
+      if (modified) {
+        pos.needsUpdate = true;
+        this.geometry.computeVertexNormals();
+        this.geometry.computeBoundingBox();
+      }
+
+      // Grass: lighter warmer green with subtle organic gradient
       const grassHue = Math.random() > 0.5 ? 'rgba(95, 148, 56, ' : 'rgba(78, 132, 45, ';
       grad.addColorStop(0, `${grassHue}${Math.min(1, strength * 0.85)})`);
       grad.addColorStop(0.35, `rgba(108, 158, 68, ${strength * 0.7})`);

@@ -143,6 +143,20 @@ export class GrassManager {
 
   // ─── Paint Grass Tufts on Terrain ──────────────────────────────────────
   /**
+   * Re-align existing grass tufts to the terrain surface if ground elevation was raised.
+   */
+  adjustGrassHeights(center, radius, terrainManager) {
+    for (const tuft of this.grassTufts) {
+      const dist = Math.hypot(tuft.worldPos.x - center.x, tuft.worldPos.z - center.z);
+      if (dist < radius) {
+        const y = terrainManager.getHeightAt(tuft.worldPos.x, tuft.worldPos.z);
+        tuft.worldPos.y = y + 0.01;
+        tuft.mesh.position.y = y + 0.01;
+      }
+    }
+  }
+
+  /**
    * Scatter grass tufts within a brush circle on the terrain.
    * @param {THREE.Vector3} center  World position of the brush center
    * @param {number}        radius  Brush radius in world units
@@ -150,6 +164,9 @@ export class GrassManager {
    * @param {number}        density Number of tufts to attempt per stroke
    */
   paintGrassBlades(center, radius, terrainManager, density = 5) {
+    // Keep existing blades seated on newly elevated turf
+    this.adjustGrassHeights(center, radius, terrainManager);
+
     const count = Math.max(2, Math.floor(density * (radius / 1.5)));
 
     for (let i = 0; i < count; i++) {
