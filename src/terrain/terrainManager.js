@@ -1,5 +1,5 @@
-import * as THREE from 'three';
-import { SimplexNoise } from '../utils/noise.js';
+import * as THREE from "three";
+import { SimplexNoise } from "../utils/noise.js";
 
 export class TerrainManager {
   constructor(scene, size = 36, segments = 160) {
@@ -9,16 +9,16 @@ export class TerrainManager {
     this.noise = new SimplexNoise(108);
 
     this.texResolution = 1024;
-    this.canvas = document.createElement('canvas');
+    this.canvas = document.createElement("canvas");
     this.canvas.width = this.texResolution;
     this.canvas.height = this.texResolution;
-    this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+    this.ctx = this.canvas.getContext("2d", { willReadFrequently: true });
 
     // Brush settings
     this.brush = {
-      tool: 'sculpt-raise', // 'sculpt-raise', 'sculpt-lower', 'smooth', 'rake-sand', 'paint-moss', 'paint-grass', 'paint-sand'
+      tool: "sculpt-raise", // 'sculpt-raise', 'sculpt-lower', 'smooth', 'rake-sand', 'paint-moss', 'paint-grass', 'paint-sand'
       radius: 3.2,
-      strength: 0.5
+      strength: 0.5,
     };
 
     // History for Undo/Redo
@@ -34,18 +34,30 @@ export class TerrainManager {
   }
 
   initTextures() {
+    // Keep references to the previous textures so they can be disposed
+    const previousSandTexture = this.sandTexture;
+    const previousNormalTexture = this.normalTexture;
+
     // Fill canvas texture with initial fine white/cream zen sand
-    this.ctx.fillStyle = '#e8dec8'; // Warm sand base
+    this.ctx.fillStyle = "#e8dec8";
     this.ctx.fillRect(0, 0, this.texResolution, this.texResolution);
 
     // Add subtle procedural sand grain speckles
-    const imgData = this.ctx.getImageData(0, 0, this.texResolution, this.texResolution);
+    const imgData = this.ctx.getImageData(
+      0,
+      0,
+      this.texResolution,
+      this.texResolution,
+    );
+
     const data = imgData.data;
+
     for (let y = 0; y < this.texResolution; y++) {
       for (let x = 0; x < this.texResolution; x++) {
         const i = (y * this.texResolution + x) * 4;
         const n = (this.noise.noise2D(x * 0.15, y * 0.15) + 1) * 0.5;
         const grain = (Math.random() - 0.5) * 16;
+
         const r = 236 + grain + (n * 10 - 5);
         const g = 227 + grain + (n * 8 - 4);
         const b = 208 + grain + (n * 6 - 3);
@@ -56,8 +68,10 @@ export class TerrainManager {
         data[i + 3] = 255;
       }
     }
+
     this.ctx.putImageData(imgData, 0, 0);
 
+    // Create fresh sand texture
     this.sandTexture = new THREE.CanvasTexture(this.canvas);
     this.sandTexture.wrapS = THREE.ClampToEdgeWrapping;
     this.sandTexture.wrapT = THREE.ClampToEdgeWrapping;
@@ -65,19 +79,40 @@ export class TerrainManager {
     this.sandTexture.magFilter = THREE.LinearFilter;
     this.sandTexture.generateMipmaps = true;
 
-    // Normal map canvas for high-frequency fine texture
-    this.normalCanvas = document.createElement('canvas');
+    // Create a fresh normal map canvas
+    this.normalCanvas = document.createElement("canvas");
     this.normalCanvas.width = this.texResolution;
     this.normalCanvas.height = this.texResolution;
-    this.normalCtx = this.normalCanvas.getContext('2d', { willReadFrequently: true });
-    this.normalCtx.fillStyle = '#8080ff'; // Flat normal vector (0, 0, 1) in tangent space
+
+    this.normalCtx = this.normalCanvas.getContext("2d", {
+      willReadFrequently: true,
+    });
+
+    this.normalCtx.fillStyle = "#8080ff";
     this.normalCtx.fillRect(0, 0, this.texResolution, this.texResolution);
 
+    // Create fresh normal texture
     this.normalTexture = new THREE.CanvasTexture(this.normalCanvas);
     this.normalTexture.wrapS = THREE.ClampToEdgeWrapping;
     this.normalTexture.wrapT = THREE.ClampToEdgeWrapping;
     this.normalTexture.minFilter = THREE.LinearMipmapLinearFilter;
     this.normalTexture.magFilter = THREE.LinearFilter;
+
+    // IMPORTANT: Update the existing terrain material
+    if (this.material) {
+      this.material.map = this.sandTexture;
+      this.material.normalMap = this.normalTexture;
+      this.material.needsUpdate = true;
+    }
+
+    // Dispose of old textures after replacing them
+    if (previousSandTexture) {
+      previousSandTexture.dispose();
+    }
+
+    if (previousNormalTexture) {
+      previousNormalTexture.dispose();
+    }
   }
 
   createTerrainMesh() {
@@ -85,7 +120,7 @@ export class TerrainManager {
       this.size,
       this.size,
       this.segments,
-      this.segments
+      this.segments,
     );
     this.geometry.rotateX(-Math.PI / 2);
 
@@ -108,7 +143,7 @@ export class TerrainManager {
       normalScale: new THREE.Vector2(1.6, 1.6),
       roughness: 0.88,
       metalness: 0.04,
-      flatShading: false
+      flatShading: false,
     });
 
     // Dynamic Shader Enhancement:
@@ -116,21 +151,21 @@ export class TerrainManager {
     // (matching classical Saihō-ji & Tōfuku-ji green moss mounds rising out of pristine zen sand)
     this.material.onBeforeCompile = (shader) => {
       shader.vertexShader = shader.vertexShader.replace(
-        '#include <common>',
+        "#include <common>",
         `#include <common>
         varying vec3 vTerrainWorldPos;
-        varying float vElevation;`
+        varying float vElevation;`,
       );
 
       shader.vertexShader = shader.vertexShader.replace(
-        '#include <project_vertex>',
+        "#include <project_vertex>",
         `vElevation = position.y;
         vTerrainWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
-        #include <project_vertex>`
+        #include <project_vertex>`,
       );
 
       shader.fragmentShader = shader.fragmentShader.replace(
-        '#include <common>',
+        "#include <common>",
         `#include <common>
         varying vec3 vTerrainWorldPos;
         varying float vElevation;
@@ -159,20 +194,23 @@ export class TerrainManager {
           v += terrainNoise(p * 2.1) * 0.25;
           v += terrainNoise(p * 4.3) * 0.125;
           return v;
-        }`
+        }`,
       );
 
       shader.fragmentShader = shader.fragmentShader.replace(
-        '#include <map_fragment>',
+        "#include <map_fragment>",
         `#include <map_fragment>
         
-        // Edge breakup for organic clumping of moss along the mound perimeter
-        float nEdge = (terrainFbm(vTerrainWorldPos.xz * 1.4) - 0.5) * 0.09;
-        float nMicro = terrainFbm(vTerrainWorldPos.xz * 5.2);
-        float effectiveH = vElevation + nEdge;
+     float nEdge = (terrainFbm(vTerrainWorldPos.xz * 1.4) - 0.5) * 0.09;
+    float nMicro = terrainFbm(vTerrainWorldPos.xz * 5.2);
 
-        // Lush moss blend: starts at ~0.035m baseline, transitions to full moss cover by 0.18m
-        float mossBlend = smoothstep(0.035, 0.18, effectiveH);
+    // Edge noise only affects elevated terrain.
+    // Flat sand at y=0 can never become green from shader noise.
+    float edgeMask = smoothstep(0.035, 0.18, max(vElevation, 0.0));
+    float effectiveH = vElevation + nEdge * edgeMask;
+
+    // Moss starts at the actual terrain elevation threshold.
+    float mossBlend = smoothstep(0.035, 0.18, effectiveH);
 
         // Authentic Japanese moss palette (Kyoto Saihō-ji / Tōfuku-ji velvet moss mounds)
         vec3 cMossDeep = vec3(0.19, 0.35, 0.15);   // Rich forest velvet
@@ -191,29 +229,34 @@ export class TerrainManager {
 
         // Blend diffuse color: pristine sand -> lush moss mounds -> pond bed
         diffuseColor.rgb = mix(diffuseColor.rgb, mossColor, mossBlend);
-        diffuseColor.rgb = mix(diffuseColor.rgb, siltColor, pondBlend);`
+        diffuseColor.rgb = mix(diffuseColor.rgb, siltColor, pondBlend);`,
       );
 
       shader.fragmentShader = shader.fragmentShader.replace(
-        '#include <roughnessmap_fragment>',
+        "#include <roughnessmap_fragment>",
         `#include <roughnessmap_fragment>
         // Velvet moss has soft high roughness for plush velvet look
         roughnessFactor = mix(roughnessFactor, 0.96, mossBlend * 0.9);
         // Pond basin bed is wet and smoother
-        roughnessFactor = mix(roughnessFactor, 0.28, pondBlend * 0.85);`
+        roughnessFactor = mix(roughnessFactor, 0.28, pondBlend * 0.85);`,
       );
     };
 
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.receiveShadow = true;
     this.mesh.castShadow = true;
-    this.mesh.name = 'zen_terrain';
+    this.mesh.name = "zen_terrain";
     this.scene.add(this.mesh);
   }
 
   createWaterPlane() {
     // Reflective translucent pond layer revealed when carved down
-    const waterGeo = new THREE.PlaneGeometry(this.size * 0.98, this.size * 0.98, 40, 40);
+    const waterGeo = new THREE.PlaneGeometry(
+      this.size * 0.98,
+      this.size * 0.98,
+      40,
+      40,
+    );
     waterGeo.rotateX(-Math.PI / 2);
 
     this.waterMaterial = new THREE.MeshStandardMaterial({
@@ -222,7 +265,7 @@ export class TerrainManager {
       metalness: 0.3,
       transparent: true,
       opacity: 0.88,
-      depthWrite: false
+      depthWrite: false,
     });
 
     this.waterMesh = new THREE.Mesh(waterGeo, this.waterMaterial);
@@ -237,7 +280,7 @@ export class TerrainManager {
     const borderMat = new THREE.MeshStandardMaterial({
       color: 0x3d2719,
       roughness: 0.7,
-      metalness: 0.1
+      metalness: 0.1,
     });
 
     const borderThickness = 0.7;
@@ -245,38 +288,66 @@ export class TerrainManager {
     const halfSize = this.size / 2;
 
     // 4 Border beams
-    const beamGeoX = new THREE.BoxGeometry(this.size + borderThickness * 2, borderHeight, borderThickness);
-    const beamGeoZ = new THREE.BoxGeometry(borderThickness, borderHeight, this.size);
+    const beamGeoX = new THREE.BoxGeometry(
+      this.size + borderThickness * 2,
+      borderHeight,
+      borderThickness,
+    );
+    const beamGeoZ = new THREE.BoxGeometry(
+      borderThickness,
+      borderHeight,
+      this.size,
+    );
 
     const northBeam = new THREE.Mesh(beamGeoX, borderMat);
-    northBeam.position.set(0, borderHeight * 0.35, -halfSize - borderThickness / 2);
+    northBeam.position.set(
+      0,
+      borderHeight * 0.35,
+      -halfSize - borderThickness / 2,
+    );
     northBeam.castShadow = true;
     northBeam.receiveShadow = true;
 
     const southBeam = new THREE.Mesh(beamGeoX, borderMat);
-    southBeam.position.set(0, borderHeight * 0.35, halfSize + borderThickness / 2);
+    southBeam.position.set(
+      0,
+      borderHeight * 0.35,
+      halfSize + borderThickness / 2,
+    );
     southBeam.castShadow = true;
     southBeam.receiveShadow = true;
 
     const eastBeam = new THREE.Mesh(beamGeoZ, borderMat);
-    eastBeam.position.set(halfSize + borderThickness / 2, borderHeight * 0.35, 0);
+    eastBeam.position.set(
+      halfSize + borderThickness / 2,
+      borderHeight * 0.35,
+      0,
+    );
     eastBeam.castShadow = true;
     eastBeam.receiveShadow = true;
 
     const westBeam = new THREE.Mesh(beamGeoZ, borderMat);
-    westBeam.position.set(-halfSize - borderThickness / 2, borderHeight * 0.35, 0);
+    westBeam.position.set(
+      -halfSize - borderThickness / 2,
+      borderHeight * 0.35,
+      0,
+    );
     westBeam.castShadow = true;
     westBeam.receiveShadow = true;
 
     frameGroup.add(northBeam, southBeam, eastBeam, westBeam);
 
     // Surrounding outer dark river pebble bed
-    const outerGeo = new THREE.RingGeometry(this.size * 0.7, this.size * 1.3, 32);
+    const outerGeo = new THREE.RingGeometry(
+      this.size * 0.7,
+      this.size * 1.3,
+      32,
+    );
     outerGeo.rotateX(-Math.PI / 2);
     const outerMat = new THREE.MeshStandardMaterial({
       color: 0x2c2c2c,
       roughness: 0.95,
-      metalness: 0.05
+      metalness: 0.05,
     });
     const outerPebble = new THREE.Mesh(outerGeo, outerMat);
     outerPebble.position.y = -0.25;
@@ -289,20 +360,20 @@ export class TerrainManager {
 
   // World coordinate to canvas UV pixel coordinates (matching Three.js flipY = true)
   worldToCanvas(worldX, worldZ) {
-    const u = (worldX / this.size) + 0.5;
-    const v = (worldZ / this.size) + 0.5;
+    const u = worldX / this.size + 0.5;
+    const v = worldZ / this.size + 0.5;
     return {
       x: Math.floor(THREE.MathUtils.clamp(u, 0, 1) * this.texResolution),
-      y: Math.floor(THREE.MathUtils.clamp(1.0 - v, 0, 1) * this.texResolution)
+      y: Math.floor(THREE.MathUtils.clamp(1.0 - v, 0, 1) * this.texResolution),
     };
   }
 
   canvasToWorld(cx, cy) {
     const u = cx / this.texResolution;
-    const v = 1.0 - (cy / this.texResolution);
+    const v = 1.0 - cy / this.texResolution;
     return {
       x: (u - 0.5) * this.size,
-      z: (v - 0.5) * this.size
+      z: (v - 0.5) * this.size,
     };
   }
 
@@ -313,28 +384,31 @@ export class TerrainManager {
     const strength = this.brush.strength;
 
     switch (tool) {
-      case 'sculpt-raise':
+      case "sculpt-raise":
         this.deformTerrain(point, radius, strength * 0.15);
         break;
-      case 'sculpt-lower':
+      case "sculpt-lower":
         this.deformTerrain(point, radius, -strength * 0.15);
         break;
-      case 'smooth':
+      case "smooth":
         this.smoothTerrain(point, radius, strength * 0.35);
         break;
-      case 'rake-sand':
+      case "rake-sand":
         this.rakeSand(point, radius, strength);
         break;
-      case 'paint-moss':
-        this.paintSurface(point, radius, 'moss', strength);
+      case "paint-moss":
+        this.paintSurface(point, radius, "moss", strength);
         break;
-      case 'paint-grass':
-        this.paintSurface(point, radius, 'grass', strength);
+      case "paint-grass":
+        this.paintSurface(point, radius, "grass", strength);
         break;
-      case 'paint-sand':
-        this.paintSurface(point, radius, 'sand', strength);
+      case "paint-sand":
+        this.paintSurface(point, radius, "sand", strength);
         break;
-      case 'water-pool':
+      case "flatten-sand":
+        this.flattenToSand(point, radius, strength);
+        break;
+      case "water-pool":
         this.carveWaterPool(point, radius, strength);
         break;
       default:
@@ -403,7 +477,7 @@ export class TerrainManager {
       const dySq = dy * dy;
 
       for (let lx = 0; lx < w; lx++) {
-        const dx = (minX + lx) - cp.x;
+        const dx = minX + lx - cp.x;
         const distSq = dx * dx + dySq;
         if (distSq < radPxSq) {
           const dist = Math.sqrt(distSq);
@@ -415,13 +489,16 @@ export class TerrainManager {
 
           // Diffuse color blend
           dData[idx] = dData[idx] + (colR[lx] + grain - dData[idx]) * factor;
-          dData[idx + 1] = dData[idx + 1] + (colG[lx] + grain - dData[idx + 1]) * factor;
-          dData[idx + 2] = dData[idx + 2] + (colB[lx] + grain - dData[idx + 2]) * factor;
+          dData[idx + 1] =
+            dData[idx + 1] + (colG[lx] + grain - dData[idx + 1]) * factor;
+          dData[idx + 2] =
+            dData[idx + 2] + (colB[lx] + grain - dData[idx + 2]) * factor;
 
           // Normal map blend
           nData[idx] = nData[idx] + (colNormR[lx] - nData[idx]) * factor;
           nData[idx + 1] = nData[idx + 1] + (128 - nData[idx + 1]) * factor;
-          nData[idx + 2] = nData[idx + 2] + (colNormB[lx] - nData[idx + 2]) * factor;
+          nData[idx + 2] =
+            nData[idx + 2] + (colNormB[lx] - nData[idx + 2]) * factor;
         }
       }
     }
@@ -442,8 +519,12 @@ export class TerrainManager {
       if (dist < radius) {
         const falloff = 0.5 * (1 + Math.cos((dist / radius) * Math.PI));
         const curY = pos.getY(i);
-        const targetY = Math.sin(freq * vx) * 0.038 * Math.min(1.0, strength * 1.2);
-        pos.setY(i, THREE.MathUtils.lerp(curY, targetY, 0.45 * strength * falloff));
+        const targetY =
+          Math.sin(freq * vx) * 0.038 * Math.min(1.0, strength * 1.2);
+        pos.setY(
+          i,
+          THREE.MathUtils.lerp(curY, targetY, 0.45 * strength * falloff),
+        );
         modified = true;
       }
     }
@@ -513,7 +594,7 @@ export class TerrainManager {
 
   // Nest placed stone in moss bedding if requested
   nestStoneInMoss(x, z, radius = 1.6) {
-    this.paintSurface({ x, z }, radius, 'moss', 0.85);
+    this.paintSurface({ x, z }, radius, "moss", 0.85);
   }
 
   // 3. Terrain Sculpting (Raise hills / Lower depressions)
@@ -540,7 +621,10 @@ export class TerrainManager {
         const dampThreshold = MAX_HEIGHT * 0.65;
         if (delta > 0 && curY > dampThreshold) {
           const headroom = Math.max(0, MAX_HEIGHT - curY);
-          const damping = Math.min(1.0, Math.pow(headroom / (MAX_HEIGHT - dampThreshold), 1.25));
+          const damping = Math.min(
+            1.0,
+            Math.pow(headroom / (MAX_HEIGHT - dampThreshold), 1.25),
+          );
           delta *= damping;
         } else if (delta < 0 && curY < -1.0) {
           const depthroom = Math.max(0, curY - MIN_HEIGHT);
@@ -622,7 +706,7 @@ export class TerrainManager {
       const dySq = dy * dy;
 
       for (let lx = 0; lx < w; lx++) {
-        const dx = (minX + lx) - cp.x;
+        const dx = minX + lx - cp.x;
         const distSq = dx * dx + dySq;
         if (distSq < radPxSq) {
           const dist = Math.sqrt(distSq);
@@ -634,8 +718,10 @@ export class TerrainManager {
 
           // Restore smooth flat sand diffuse
           dData[idx] = dData[idx] + (baseR + grain - dData[idx]) * factor;
-          dData[idx + 1] = dData[idx + 1] + (baseG + grain - dData[idx + 1]) * factor;
-          dData[idx + 2] = dData[idx + 2] + (baseB + grain - dData[idx + 2]) * factor;
+          dData[idx + 1] =
+            dData[idx + 1] + (baseG + grain - dData[idx + 1]) * factor;
+          dData[idx + 2] =
+            dData[idx + 2] + (baseB + grain - dData[idx + 2]) * factor;
 
           // Restore flat tangent normal: (128, 128, 255) to erase ridges
           nData[idx] = nData[idx] + (128 - nData[idx]) * factor;
@@ -658,11 +744,15 @@ export class TerrainManager {
     const radiusPx = (radius / this.size) * this.texResolution;
 
     const grad = this.ctx.createRadialGradient(
-      cp.x, cp.y, 0,
-      cp.x, cp.y, radiusPx
+      cp.x,
+      cp.y,
+      0,
+      cp.x,
+      cp.y,
+      radiusPx,
     );
 
-    if (type === 'moss') {
+    if (type === "moss") {
       // Elevate terrain vertices under moss brush to grow thick cushion beds
       const pos = this.geometry.attributes.position;
       let modified = false;
@@ -686,11 +776,12 @@ export class TerrainManager {
       }
 
       // Lush multi-hue Japanese garden moss (velvet emerald & chartreuse)
-      const mossHue = Math.random() > 0.5 ? 'rgba(74, 119, 61, ' : 'rgba(52, 90, 48, ';
+      const mossHue =
+        Math.random() > 0.5 ? "rgba(74, 119, 61, " : "rgba(52, 90, 48, ";
       grad.addColorStop(0, `${mossHue}${Math.min(1, strength * 0.95)})`);
       grad.addColorStop(0.4, `rgba(82, 126, 62, ${strength * 0.75})`);
       grad.addColorStop(0.7, `rgba(98, 142, 70, ${strength * 0.5})`);
-      grad.addColorStop(1, 'rgba(88, 128, 68, 0)');
+      grad.addColorStop(1, "rgba(88, 128, 68, 0)");
 
       this.ctx.fillStyle = grad;
       this.ctx.beginPath();
@@ -700,7 +791,7 @@ export class TerrainManager {
       // Organic stippling around edges
       this.addOrganicMossSplat(cp.x, cp.y, radiusPx);
       this.addMossNormals(cp.x, cp.y, radiusPx);
-    } else if (type === 'grass') {
+    } else if (type === "grass") {
       // Elevate terrain vertices under grass brush to form a gentle turf / sod mound
       const pos = this.geometry.attributes.position;
       let modified = false;
@@ -722,11 +813,12 @@ export class TerrainManager {
       }
 
       // Grass: lighter warmer green with subtle organic gradient
-      const grassHue = Math.random() > 0.5 ? 'rgba(95, 148, 56, ' : 'rgba(78, 132, 45, ';
+      const grassHue =
+        Math.random() > 0.5 ? "rgba(95, 148, 56, " : "rgba(78, 132, 45, ";
       grad.addColorStop(0, `${grassHue}${Math.min(1, strength * 0.85)})`);
       grad.addColorStop(0.35, `rgba(108, 158, 68, ${strength * 0.7})`);
       grad.addColorStop(0.65, `rgba(120, 170, 75, ${strength * 0.45})`);
-      grad.addColorStop(1, 'rgba(110, 155, 70, 0)');
+      grad.addColorStop(1, "rgba(110, 155, 70, 0)");
 
       this.ctx.fillStyle = grad;
       this.ctx.beginPath();
@@ -735,7 +827,7 @@ export class TerrainManager {
 
       // Fine organic grass stippling
       this.addOrganicGrassSplat(cp.x, cp.y, radiusPx);
-    } else if (type === 'sand' || type === 'smooth-sand') {
+    } else if (type === "sand" || type === "smooth-sand") {
       // Restore sand - gently lower moss cushions back towards baseline
       const pos = this.geometry.attributes.position;
       let modified = false;
@@ -757,9 +849,12 @@ export class TerrainManager {
         this.geometry.computeVertexNormals();
       }
 
-      grad.addColorStop(0, `rgba(235, 225, 206, ${Math.min(1, strength * 0.85)})`);
+      grad.addColorStop(
+        0,
+        `rgba(235, 225, 206, ${Math.min(1, strength * 0.85)})`,
+      );
       grad.addColorStop(0.7, `rgba(232, 222, 200, ${strength * 0.45})`);
-      grad.addColorStop(1, 'rgba(232, 222, 200, 0)');
+      grad.addColorStop(1, "rgba(232, 222, 200, 0)");
 
       this.ctx.fillStyle = grad;
       this.ctx.beginPath();
@@ -768,7 +863,7 @@ export class TerrainManager {
 
       // Clear normal bumps back to flat normal
       this.normalCtx.save();
-      this.normalCtx.fillStyle = 'rgba(128, 128, 255, 0.4)';
+      this.normalCtx.fillStyle = "rgba(128, 128, 255, 0.4)";
       this.normalCtx.beginPath();
       this.normalCtx.arc(cp.x, cp.y, radiusPx, 0, Math.PI * 2);
       this.normalCtx.fill();
@@ -809,7 +904,10 @@ export class TerrainManager {
       const py = cy + Math.sin(angle) * dist;
       const spotR = (2 + Math.random() * 8) * (rPx / 60);
 
-      this.ctx.fillStyle = Math.random() > 0.4 ? 'rgba(68, 105, 52, 0.4)' : 'rgba(92, 138, 70, 0.35)';
+      this.ctx.fillStyle =
+        Math.random() > 0.4
+          ? "rgba(68, 105, 52, 0.4)"
+          : "rgba(92, 138, 70, 0.35)";
       this.ctx.beginPath();
       this.ctx.arc(px, py, spotR, 0, Math.PI * 2);
       this.ctx.fill();
@@ -828,9 +926,10 @@ export class TerrainManager {
       const spotR = (1.5 + Math.random() * 5) * (rPx / 60);
 
       // Lighter warm greens, slightly yellowy for grass vs deep emerald moss
-      this.ctx.fillStyle = Math.random() > 0.5
-        ? 'rgba(105, 155, 60, 0.35)'
-        : 'rgba(128, 170, 75, 0.3)';
+      this.ctx.fillStyle =
+        Math.random() > 0.5
+          ? "rgba(105, 155, 60, 0.35)"
+          : "rgba(128, 170, 75, 0.3)";
       this.ctx.beginPath();
       this.ctx.arc(px, py, spotR, 0, Math.PI * 2);
       this.ctx.fill();
@@ -846,25 +945,23 @@ export class TerrainManager {
     const pos = this.geometry.attributes.position;
     let modified = false;
 
-    // 1. Aggressively slam terrain toward y=0 — one stroke should clear the
-    //    shader's moss threshold (y > 0.035).  For positive heights the blend
-    //    is extra strong so even tall moss mounds flatten in one drag.
+    // 1. Flatten raised terrain; preserve negative pond terrain.
     for (let i = 0; i < pos.count; i++) {
       const vx = pos.getX(i);
       const vz = pos.getZ(i);
       const dist = Math.hypot(vx - center.x, vz - center.z);
 
-      if (dist < radius) {
-        const falloff = 0.5 * (1 + Math.cos((dist / radius) * Math.PI));
-        const curY = pos.getY(i);
+      if (dist >= radius) continue;
 
-        // Very aggressive flatten: at center with strength 0.5 this uses
-        // factor ≈ 0.85, meaning y=0.42 → 0.063 in ONE stroke, and a
-        // second stroke finishes it.  Negative (pond) areas flatten more
-        // gently so water pools aren't accidentally erased.
-        const rate = curY > 0 ? (0.7 + strength * 0.6) : (strength * 0.4);
-        const newY = curY + (0.0 - curY) * Math.min(1.0, rate) * falloff;
-        pos.setY(i, Math.abs(newY) < 0.01 ? 0.0 : newY);
+      const falloff = 0.5 * (1 + Math.cos((dist / radius) * Math.PI));
+      const curY = pos.getY(i);
+
+      if (curY > 0) {
+        const flattenRate = Math.min(1, strength * 2);
+        const factor = flattenRate * falloff;
+        const newY = THREE.MathUtils.lerp(curY, 0, factor);
+
+        pos.setY(i, newY < 0.035 ? 0 : newY);
         modified = true;
       }
     }
@@ -876,7 +973,7 @@ export class TerrainManager {
       this.geometry.computeBoundingSphere();
     }
 
-    // 2. Hard-overwrite canvas texture with pristine sand color
+    // 2. Overwrite the diffuse and normal textures inside the brush.
     const cp = this.worldToCanvas(center.x, center.z);
     const radiusPx = (radius / this.size) * this.texResolution;
 
@@ -895,13 +992,14 @@ export class TerrainManager {
     const nData = normalImg.data;
 
     const radPxSq = radiusPx * radiusPx;
-    // Near-total overwrite: at strength 0.5 → blendRate = 0.92
-    const blendRate = Math.min(1.0, 0.7 + strength * 0.45);
 
-    // Warm zen sand base color
+    // Sand base color
     const baseR = 232;
     const baseG = 224;
     const baseB = 208;
+
+    // Strength >= 2/3 fully replaces texture at the brush center.
+    const blendRate = Math.min(1, strength * 1.5);
 
     for (let ly = 0; ly < h; ly++) {
       const gy = minY + ly;
@@ -909,26 +1007,36 @@ export class TerrainManager {
       const dySq = dy * dy;
 
       for (let lx = 0; lx < w; lx++) {
-        const dx = (minX + lx) - cp.x;
+        const dx = minX + lx - cp.x;
         const distSq = dx * dx + dySq;
-        if (distSq < radPxSq) {
-          const dist = Math.sqrt(distSq);
-          const falloff = 0.5 * (1 + Math.cos((dist / radiusPx) * Math.PI));
-          const factor = blendRate * falloff;
 
-          const idx = (ly * w + lx) * 4;
-          const grain = (Math.random() - 0.5) * 6;
+        if (distSq >= radPxSq) continue;
 
-          // Hard overwrite toward sand — stamps out green moss/grass paint
-          dData[idx]     = Math.round(dData[idx]     * (1 - factor) + (baseR + grain) * factor);
-          dData[idx + 1] = Math.round(dData[idx + 1] * (1 - factor) + (baseG + grain) * factor);
-          dData[idx + 2] = Math.round(dData[idx + 2] * (1 - factor) + (baseB + grain) * factor);
+        const dist = Math.sqrt(distSq);
+        const falloff = 0.5 * (1 + Math.cos((dist / radiusPx) * Math.PI));
+        const factor = 1;
 
-          // Fully reset normal to flat (128, 128, 255)
-          nData[idx]     = Math.round(nData[idx]     * (1 - factor) + 128 * factor);
-          nData[idx + 1] = Math.round(nData[idx + 1] * (1 - factor) + 128 * factor);
-          nData[idx + 2] = Math.round(nData[idx + 2] * (1 - factor) + 255 * factor);
-        }
+        const idx = (ly * w + lx) * 4;
+        const grain = (Math.random() - 0.5) * 6;
+
+        dData[idx] = Math.round(
+          dData[idx] * (1 - factor) + (baseR + grain) * factor,
+        );
+        dData[idx + 1] = Math.round(
+          dData[idx + 1] * (1 - factor) + (baseG + grain) * factor,
+        );
+        dData[idx + 2] = Math.round(
+          dData[idx + 2] * (1 - factor) + (baseB + grain) * factor,
+        );
+
+        // Reset the normal map toward flat.
+        nData[idx] = Math.round(nData[idx] * (1 - factor) + 128 * factor);
+        nData[idx + 1] = Math.round(
+          nData[idx + 1] * (1 - factor) + 128 * factor,
+        );
+        nData[idx + 2] = Math.round(
+          nData[idx + 2] * (1 - factor) + 255 * factor,
+        );
       }
     }
 
@@ -947,12 +1055,16 @@ export class TerrainManager {
     const radiusPx = (radius / this.size) * this.texResolution;
 
     const grad = this.ctx.createRadialGradient(
-      cp.x, cp.y, 0,
-      cp.x, cp.y, radiusPx
+      cp.x,
+      cp.y,
+      0,
+      cp.x,
+      cp.y,
+      radiusPx,
     );
-    grad.addColorStop(0, 'rgba(42, 60, 58, 0.65)');
-    grad.addColorStop(0.7, 'rgba(60, 80, 72, 0.4)');
-    grad.addColorStop(1, 'rgba(60, 80, 72, 0)');
+    grad.addColorStop(0, "rgba(42, 60, 58, 0.65)");
+    grad.addColorStop(0.7, "rgba(60, 80, 72, 0.4)");
+    grad.addColorStop(1, "rgba(60, 80, 72, 0)");
 
     this.ctx.fillStyle = grad;
     this.ctx.beginPath();
@@ -966,8 +1078,8 @@ export class TerrainManager {
     const half = this.size / 2;
     if (x < -half || x > half || z < -half || z > half) return 0;
 
-    const u = (x / this.size) + 0.5;
-    const v = (z / this.size) + 0.5;
+    const u = x / this.size + 0.5;
+    const v = z / this.size + 0.5;
 
     const seg = this.segments;
     const gx = THREE.MathUtils.clamp(u * seg, 0, seg - 1);
@@ -1012,8 +1124,18 @@ export class TerrainManager {
   saveState() {
     const pos = this.geometry.attributes.position;
     const heightSnapshot = new Float32Array(pos.array);
-    const imgData = this.ctx.getImageData(0, 0, this.texResolution, this.texResolution);
-    const normalData = this.normalCtx.getImageData(0, 0, this.texResolution, this.texResolution);
+    const imgData = this.ctx.getImageData(
+      0,
+      0,
+      this.texResolution,
+      this.texResolution,
+    );
+    const normalData = this.normalCtx.getImageData(
+      0,
+      0,
+      this.texResolution,
+      this.texResolution,
+    );
 
     if (this.historyIndex < this.history.length - 1) {
       this.history = this.history.slice(0, this.historyIndex + 1);
@@ -1022,7 +1144,7 @@ export class TerrainManager {
     this.history.push({
       heights: heightSnapshot,
       imgData: imgData,
-      normalData: normalData
+      normalData: normalData,
     });
 
     if (this.history.length > this.maxHistory) {
