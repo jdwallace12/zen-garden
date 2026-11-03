@@ -405,12 +405,14 @@ class ZenGardenApp {
     const isRake = this.terrain.brush.tool === 'rake-sand';
     const isGrass = this.terrain.brush.tool === 'paint-grass';
     const isMossTool = this.terrain.brush.tool === 'paint-moss';
+    const isSandTool = this.terrain.brush.tool === 'paint-sand';
 
     // Choose cursor colour based on active tool
     let cursorColor = 0xb83324; // default red
     if (isRake) cursorColor = 0xd49b4d;       // warm gold
     else if (isGrass) cursorColor = 0x5daa2f;  // vibrant green
     else if (isMossTool) cursorColor = 0x3d8836; // deep moss green
+    else if (isSandTool) cursorColor = 0xe0d4b8; // warm sand beige
 
     this.cursorRing.scale.set(r, 1, r);
     if (this.rakeCursorLines) {
@@ -590,6 +592,7 @@ class ZenGardenApp {
           'smooth': 'Click & drag to gently level and blend the terrain.',
           'paint-moss': 'Click & drag to paint lush green moss onto the terrain.',
           'paint-grass': 'Click & drag to paint swaying grass blades onto the terrain.',
+          'paint-sand': 'Click & drag to flatten terrain and restore pristine sand.',
           'rake-sand': 'Click & drag to rake the sand in serene vertical lines.'
         };
         this.updateHint(hints[btn.dataset.tool] || 'Drag on terrain to carve.');
@@ -979,6 +982,25 @@ class ZenGardenApp {
 
       zenAudio.setRakeIntensity(
         Math.min(1.5, Math.max(0.3, (this.lastHitPoint ? this.lastHitPoint.distanceTo(hit.point) : 0.08) * 5.0))
+      );
+ } else if (tool === 'paint-sand') {
+      // Sand tool: flatten terrain toward baseline, restore sand texture, remove moss & grass
+      this.terrain.flattenToSand(
+        hit.point,
+        this.terrain.brush.radius,
+        this.terrain.brush.strength
+      );
+
+      // Remove any 3D moss cushions and grass tufts in the brush area
+      if (this.mossManager) {
+        this.mossManager.pruneMossAt(hit.point, this.terrain.brush.radius);
+      }
+      if (this.grassManager) {
+        this.grassManager.pruneGrassAt(hit.point, this.terrain.brush.radius);
+      }
+
+      zenAudio.setRakeIntensity(
+        Math.min(1.2, Math.max(0.2, (this.lastHitPoint ? this.lastHitPoint.distanceTo(hit.point) : 0.08) * 4.0))
       );
  } else if (tool === 'rake-sand') {
       const dist = this.lastHitPoint ? this.lastHitPoint.distanceTo(hit.point) : 0.08;
