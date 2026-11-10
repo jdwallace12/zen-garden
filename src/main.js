@@ -160,6 +160,27 @@ class ZenGardenApp {
     this.rakeCursorLines.visible = false;
     this.brushCursorGroup.add(this.rakeCursorLines);
 
+    // Concentric ripple rings indicator for Circle Sand Rake tool
+    this.rakeCursorCircles = new THREE.Group();
+    const circleLineMat = new THREE.LineBasicMaterial({
+      color: 0xd49b4d,
+      transparent: true,
+      opacity: 0.85
+    });
+    const ringRadii = [0.28, 0.52, 0.76, 0.98];
+    for (const rr of ringRadii) {
+      const ringPts = [];
+      const segs = 48;
+      for (let s = 0; s <= segs; s++) {
+        const theta = (s / segs) * Math.PI * 2;
+        ringPts.push(new THREE.Vector3(Math.cos(theta) * rr, 0.01, Math.sin(theta) * rr));
+      }
+      const ringGeo = new THREE.BufferGeometry().setFromPoints(ringPts);
+      this.rakeCursorCircles.add(new THREE.Line(ringGeo, circleLineMat));
+    }
+    this.rakeCursorCircles.visible = false;
+    this.brushCursorGroup.add(this.rakeCursorCircles);
+
     this.brushCursorGroup.visible = false;
     this.scene.add(this.brushCursorGroup);
   }
@@ -403,13 +424,14 @@ class ZenGardenApp {
     this.brushCursorGroup.visible = true;
     const r = this.terrain.brush.radius;
     const isRake = this.terrain.brush.tool === 'rake-sand';
+    const isCircleRake = this.terrain.brush.tool === 'rake-circle';
     const isGrass = this.terrain.brush.tool === 'paint-grass';
     const isMossTool = this.terrain.brush.tool === 'paint-moss';
     const isSandTool = this.terrain.brush.tool === 'paint-sand';
 
     // Choose cursor colour based on active tool
     let cursorColor = 0xb83324; // default red
-    if (isRake) cursorColor = 0xd49b4d;       // warm gold
+    if (isRake || isCircleRake) cursorColor = 0xd49b4d; // warm gold
     else if (isGrass) cursorColor = 0x5daa2f;  // vibrant green
     else if (isMossTool) cursorColor = 0x3d8836; // deep moss green
     else if (isSandTool) cursorColor = 0xe0d4b8; // warm sand beige
@@ -418,6 +440,10 @@ class ZenGardenApp {
     if (this.rakeCursorLines) {
       this.rakeCursorLines.scale.set(r, 1, r);
       this.rakeCursorLines.visible = isRake;
+    }
+    if (this.rakeCursorCircles) {
+      this.rakeCursorCircles.scale.set(r, 1, r);
+      this.rakeCursorCircles.visible = isCircleRake;
     }
     if (this.cursorRing.material) {
       this.cursorRing.material.color.setHex(cursorColor);
@@ -593,7 +619,8 @@ class ZenGardenApp {
           'paint-moss': 'Click & drag to paint lush green moss onto the terrain.',
           'paint-grass': 'Click & drag to paint swaying grass blades onto the terrain.',
           'paint-sand': 'Click & drag to flatten terrain and restore pristine sand.',
-          'rake-sand': 'Click & drag to rake the sand in serene vertical lines.'
+          'rake-sand': 'Click & drag to rake the sand in serene parallel lines.',
+          'rake-circle': 'Click or drag to rake concentric ripple rings around stones.'
         };
         this.updateHint(hints[btn.dataset.tool] || 'Drag on terrain to carve.');
       });
@@ -1005,12 +1032,10 @@ class ZenGardenApp {
  } else if (tool === 'rake-sand') {
       const dist = this.lastHitPoint ? this.lastHitPoint.distanceTo(hit.point) : 0.08;
       this.terrain.rakeSand(hit.point, this.terrain.brush.radius, this.terrain.brush.strength);
-      if (this.mossManager) {
-        this.mossManager.pruneMossAt(hit.point, this.terrain.brush.radius);
-      }
-      if (this.grassManager) {
-        this.grassManager.pruneGrassAt(hit.point, this.terrain.brush.radius);
-      }
+      zenAudio.setRakeIntensity(Math.min(2.0, Math.max(0.4, dist * 6.0)));
+ } else if (tool === 'rake-circle') {
+      const dist = this.lastHitPoint ? this.lastHitPoint.distanceTo(hit.point) : 0.08;
+      this.terrain.rakeCircle(hit.point, this.terrain.brush.radius, this.terrain.brush.strength);
       zenAudio.setRakeIntensity(Math.min(2.0, Math.max(0.4, dist * 6.0)));
     } else if (tool === 'smooth') {
       this.terrain.applyBrush(hit.point, this.lastHitPoint || hit.point, isDragging);

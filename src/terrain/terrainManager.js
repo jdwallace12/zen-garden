@@ -16,7 +16,7 @@ export class TerrainManager {
 
     // Brush settings
     this.brush = {
-      tool: "sculpt-raise", // 'sculpt-raise', 'sculpt-lower', 'smooth', 'rake-sand', 'paint-moss', 'paint-grass', 'paint-sand'
+      tool: "sculpt-raise", // 'sculpt-raise', 'sculpt-lower', 'smooth', 'rake-sand', 'rake-circle', 'paint-moss', 'paint-grass', 'paint-sand'
       radius: 3.2,
       strength: 0.5,
     };
@@ -396,6 +396,9 @@ export class TerrainManager {
       case "rake-sand":
         this.rakeSand(point, radius, strength);
         break;
+      case "rake-circle":
+        this.rakeCircle(point, radius, strength);
+        break;
       case "paint-moss":
         this.paintSurface(point, radius, "moss", strength);
         break;
@@ -436,12 +439,18 @@ export class TerrainManager {
     const dData = diffuseImg.data;
     const nData = normalImg.data;
 
-    // Line spacing: ~32cm between vertical ridges for bold, clearly visible furrows
+    // Line spacing: ~32cm between vertical ridges
     const lineSpacing = 0.32;
     const freq = (Math.PI * 2) / lineSpacing;
     const radPxSq = radiusPx * radiusPx;
 
+    // Pristine sand base color
+    const baseR = 232;
+    const baseG = 224;
+    const baseB = 208;
+
     // Precalculate target values per column for vertical lines
+    // Subtle, natural contrast (gentle crest brightness & soft furrow shadow)
     const colR = new Float32Array(w);
     const colG = new Float32Array(w);
     const colB = new Float32Array(w);
@@ -455,21 +464,20 @@ export class TerrainManager {
       const wave = Math.sin(phase);
       const cosWave = Math.cos(phase);
 
-      const ridge = wave * 0.5 + 0.5;
-      // High contrast: dark warm furrow shadow to bright sunlit crest
-      colR[lx] = 160 + ridge * 92;
-      colG[lx] = 144 + ridge * 102;
-      colB[lx] = 115 + ridge * 120;
+      // Gentle shadow: crest +6, furrow -12 (not harsh black stripes)
+      colR[lx] = baseR + wave * 8;
+      colG[lx] = baseG + wave * 7;
+      colB[lx] = baseB + wave * 6;
 
-      // Steep normal vector slope for pronounced 3D shading
-      const nx = -1.5 * cosWave;
+      // Subtle natural normal vector slope
+      const nx = -0.55 * cosWave;
       const nz = 1.0;
       const invLen = 1.0 / Math.hypot(nx, nz);
       colNormR[lx] = Math.round((nx * invLen * 0.5 + 0.5) * 255);
       colNormB[lx] = Math.round((nz * invLen * 0.5 + 0.5) * 255);
     }
 
-    const blendRate = Math.min(1.0, strength * 0.95);
+    const blendRate = Math.min(1.0, strength * 0.65);
 
     for (let ly = 0; ly < h; ly++) {
       const gy = minY + ly;
@@ -480,11 +488,17 @@ export class TerrainManager {
         const dx = minX + lx - cp.x;
         const distSq = dx * dx + dySq;
         if (distSq < radPxSq) {
+          const idx = (ly * w + lx) * 4;
+
+          // Protect non-sand terrain: skip green moss/grass, shrubs, wet pond beds
+          const pr = dData[idx];
+          const pg = dData[idx + 1];
+          const isSand = (pr >= 185 && pr > pg * 0.98);
+          if (!isSand) continue;
+
           const dist = Math.sqrt(distSq);
           const falloff = 0.5 * (1 + Math.cos((dist / radiusPx) * Math.PI));
           const factor = blendRate * falloff;
-
-          const idx = (ly * w + lx) * 4;
           const grain = (Math.random() - 0.5) * 4;
 
           // Diffuse color blend
@@ -510,6 +524,7 @@ export class TerrainManager {
     this.normalTexture.needsUpdate = true;
 
     // Carve physical 3D ridges and furrows into terrain geometry
+    // ONLY affects flat sand (curY between -0.06 and 0.035). Elevated mounds & ponds are untouched!
     const pos = this.geometry.attributes.position;
     let modified = false;
     for (let i = 0; i < pos.count; i++) {
@@ -517,10 +532,135 @@ export class TerrainManager {
       const vz = pos.getZ(i);
       const dist = Math.hypot(vx - center.x, vz - center.z);
       if (dist < radius) {
-        const falloff = 0.5 * (1 + Math.cos((dist / radius) * Math.PI));
         const curY = pos.getY(i);
+        if (curY > 0.035 || curY < -0.06) continue; // Don't disturb moss mounds or ponds!
+
+        const falloff = 0.5 * (1 + Math.cos((dist / radius) * Math.PI));
         const targetY =
-          Math.sin(freq * vx) * 0.038 * Math.min(1.0, strength * 1.2);
+          Math.sin(freq * vx) * 0.016 * Math.min(1.0, strength);
+        pos.setY(
+          i,
+          THREE.MathUtils.lerp(curY, targetY, 0.4 * strength * falloff),
+        );
+        modified = true;
+      }
+    }
+    if (modified) {
+      pos.needsUpdate = true;
+      this.geometry.computeVertexNormals();
+    }
+  }
+
+  // Rake sand in concentric circular ripple rings (Zen water ripples around stones)
+  rakeCircle(center, radius, strength) {
+    const cp = this.worldToCanvas(center.x, center.z);
+    const radiusPx = (radius / this.size) * this.texResolution;
+
+    const minX = Math.max(0, Math.floor(cp.x - radiusPx));
+    const maxX = Math.min(this.texResolution - 1, Math.ceil(cp.x + radiusPx));
+    const minY = Math.max(0, Math.floor(cp.y - radiusPx));
+    const maxY = Math.min(this.texResolution - 1, Math.ceil(cp.y + radiusPx));
+
+    const w = maxX - minX + 1;
+    const h = maxY - minY + 1;
+    if (w <= 0 || h <= 0) return;
+
+    const diffuseImg = this.ctx.getImageData(minX, minY, w, h);
+    const normalImg = this.normalCtx.getImageData(minX, minY, w, h);
+    const dData = diffuseImg.data;
+    const nData = normalImg.data;
+
+    // Line spacing: ~32cm between concentric circular ripples
+    const lineSpacing = 0.32;
+    const freq = (Math.PI * 2) / lineSpacing;
+    const radPxSq = radiusPx * radiusPx;
+
+    const baseR = 232;
+    const baseG = 224;
+    const baseB = 208;
+    const blendRate = Math.min(1.0, strength * 0.75);
+
+    for (let ly = 0; ly < h; ly++) {
+      const gy = minY + ly;
+      const dy = gy - cp.y;
+      const dySq = dy * dy;
+      const worldZ = (gy / this.texResolution - 0.5) * this.size;
+
+      for (let lx = 0; lx < w; lx++) {
+        const dx = minX + lx - cp.x;
+        const distSq = dx * dx + dySq;
+        if (distSq < radPxSq) {
+          const idx = (ly * w + lx) * 4;
+
+          // Protect non-sand terrain
+          const pr = dData[idx];
+          const pg = dData[idx + 1];
+          const isSand = (pr >= 185 && pr > pg * 0.98);
+          if (!isSand) continue;
+
+          const gx = minX + lx;
+          const worldX = (gx / this.texResolution - 0.5) * this.size;
+          const rDist = Math.hypot(worldX - center.x, worldZ - center.z);
+
+          const phase = freq * rDist;
+          const wave = Math.sin(phase);
+          const cosWave = Math.cos(phase);
+
+          const dist = Math.sqrt(distSq);
+          const falloff = 0.5 * (1 + Math.cos((dist / radiusPx) * Math.PI));
+          const factor = blendRate * falloff;
+          const grain = (Math.random() - 0.5) * 4;
+
+          // Gentle crest & furrow color
+          const targetR = baseR + wave * 8;
+          const targetG = baseG + wave * 7;
+          const targetB = baseB + wave * 6;
+
+          dData[idx] = dData[idx] + (targetR + grain - dData[idx]) * factor;
+          dData[idx + 1] =
+            dData[idx + 1] + (targetG + grain - dData[idx + 1]) * factor;
+          dData[idx + 2] =
+            dData[idx + 2] + (targetB + grain - dData[idx + 2]) * factor;
+
+          // Radial normal vector: slope points outward from brush center
+          const dirX = rDist > 0.001 ? (worldX - center.x) / rDist : 0;
+          const dirZ = rDist > 0.001 ? (worldZ - center.z) / rDist : 0;
+          const slope = -0.55 * cosWave;
+          const nx = dirX * slope;
+          const nz = dirZ * slope;
+          const invLen = 1.0 / Math.hypot(nx, nz, 1.0);
+
+          const normR = Math.round((nx * invLen * 0.5 + 0.5) * 255);
+          const normG = Math.round((nz * invLen * 0.5 + 0.5) * 255);
+          const normB = Math.round((1.0 * invLen * 0.5 + 0.5) * 255);
+
+          nData[idx] = nData[idx] + (normR - nData[idx]) * factor;
+          nData[idx + 1] = nData[idx + 1] + (normG - nData[idx + 1]) * factor;
+          nData[idx + 2] = nData[idx + 2] + (normB - nData[idx + 2]) * factor;
+        }
+      }
+    }
+
+    this.ctx.putImageData(diffuseImg, minX, minY);
+    this.normalCtx.putImageData(normalImg, minX, minY);
+
+    this.sandTexture.needsUpdate = true;
+    this.normalTexture.needsUpdate = true;
+
+    // 3D physical ripple rings on flat sand
+    const pos = this.geometry.attributes.position;
+    let modified = false;
+    for (let i = 0; i < pos.count; i++) {
+      const vx = pos.getX(i);
+      const vz = pos.getZ(i);
+      const dist = Math.hypot(vx - center.x, vz - center.z);
+      if (dist < radius) {
+        const curY = pos.getY(i);
+        if (curY > 0.035 || curY < -0.06) continue; // Don't disturb moss mounds or ponds!
+
+        const falloff = 0.5 * (1 + Math.cos((dist / radius) * Math.PI));
+        const targetY =
+          Math.sin(freq * dist) * 0.016 * Math.min(1.0, strength);
         pos.setY(
           i,
           THREE.MathUtils.lerp(curY, targetY, 0.45 * strength * falloff),
