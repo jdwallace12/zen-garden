@@ -479,7 +479,7 @@ export class TerrainManager {
           // Protect non-sand terrain: skip green moss/grass, shrubs, wet pond beds
           const pr = dData[idx];
           const pg = dData[idx + 1];
-          const isSand = pr >= 185 && pr > pg * 0.98;
+          const isSand = (pr >= 185 && pr > pg * 0.98);
           if (!isSand) continue;
 
           const gx = minX + lx;
@@ -544,7 +544,8 @@ export class TerrainManager {
 
         const falloff = 0.5 * (1 + Math.cos((dist / radius) * Math.PI));
         const d = vx * cosAngle + vz * sinAngle;
-        const targetY = Math.sin(freq * d) * 0.016 * Math.min(1.0, strength);
+        const targetY =
+          Math.sin(freq * d) * 0.016 * Math.min(1.0, strength);
         pos.setY(
           i,
           THREE.MathUtils.lerp(curY, targetY, 0.45 * strength * falloff),
@@ -602,7 +603,7 @@ export class TerrainManager {
           // Protect non-sand terrain
           const pr = dData[idx];
           const pg = dData[idx + 1];
-          const isSand = pr >= 185 && pr > pg * 0.98;
+          const isSand = (pr >= 185 && pr > pg * 0.98);
           if (!isSand) continue;
 
           const gx = minX + lx;
@@ -666,7 +667,8 @@ export class TerrainManager {
         if (curY > 0.035 || curY < -0.06) continue; // Don't disturb moss mounds or ponds!
 
         const falloff = 0.5 * (1 + Math.cos((dist / radius) * Math.PI));
-        const targetY = Math.sin(freq * dist) * 0.016 * Math.min(1.0, strength);
+        const targetY =
+          Math.sin(freq * dist) * 0.016 * Math.min(1.0, strength);
         pos.setY(
           i,
           THREE.MathUtils.lerp(curY, targetY, 0.45 * strength * falloff),
@@ -1135,23 +1137,23 @@ export class TerrainManager {
       const radPxSq = radiusPx * radiusPx;
 
       for (let ly = 0; ly < h; ly++) {
-        const dy = minY + ly - cp.y;
+        const dy = (minY + ly) - cp.y;
         const dySq = dy * dy;
         for (let lx = 0; lx < w; lx++) {
-          const dx = minX + lx - cp.x;
+          const dx = (minX + lx) - cp.x;
           if (dx * dx + dySq > radPxSq) continue;
 
           const idx = (ly * w + lx) * 4;
           const grain = (Math.random() - 0.5) * 14;
 
           // Replace completely with pure pristine sand color + natural subtle grain
-          dData[idx] = Math.min(255, Math.max(0, 232 + grain));
+          dData[idx]     = Math.min(255, Math.max(0, 232 + grain));
           dData[idx + 1] = Math.min(255, Math.max(0, 224 + grain * 0.9));
           dData[idx + 2] = Math.min(255, Math.max(0, 208 + grain * 0.75));
           dData[idx + 3] = 255;
 
           // Flat tangent normal vector (128, 128, 255)
-          nData[idx] = 128;
+          nData[idx]     = 128;
           nData[idx + 1] = 128;
           nData[idx + 2] = 255;
           nData[idx + 3] = 255;
