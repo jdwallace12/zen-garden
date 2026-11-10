@@ -364,13 +364,13 @@ export class TerrainManager {
     const v = worldZ / this.size + 0.5;
     return {
       x: Math.floor(THREE.MathUtils.clamp(u, 0, 1) * this.texResolution),
-      y: Math.floor(THREE.MathUtils.clamp(1.0 - v, 0, 1) * this.texResolution),
+      y: Math.floor(THREE.MathUtils.clamp(v, 0, 1) * this.texResolution),
     };
   }
 
   canvasToWorld(cx, cy) {
     const u = cx / this.texResolution;
-    const v = 1.0 - cy / this.texResolution;
+    const v = cy / this.texResolution;
     return {
       x: (u - 0.5) * this.size,
       z: (v - 0.5) * this.size,
@@ -403,7 +403,7 @@ export class TerrainManager {
         this.paintSurface(point, radius, "grass", strength);
         break;
       case "paint-sand":
-        this.paintSurface(point, radius, "sand", strength);
+        this.flattenToSand(point, radius, strength);
         break;
       case "flatten-sand":
         this.flattenToSand(point, radius, strength);
@@ -938,32 +938,29 @@ export class TerrainManager {
   }
 
   // ─── Flatten to Sand Tool ─────────────────────────────────────────────
-  // Aggressively flattens terrain to y=0 (killing shader-driven green from
-  // elevation), smooths bumps, and hard-overwrites the canvas texture back
-  // to pristine warm sand, erasing all moss/grass paint and normal ridges.
+  // Aggressively: hard-sets all raised terrain inside brush to y=0 (kills
+  // the shader green completely), then stamps opaque warm sand colour and
+  // flat normals directly onto the canvas (no blending — full replacement).
   flattenToSand(center, radius, strength) {
     const pos = this.geometry.attributes.position;
     let modified = false;
 
-    // 1. Flatten raised terrain; preserve negative pond terrain.
+    // 1. Hard-flatten any raised or slightly uneven ground inside brush to 0
+    //    (preserves deep ponds, y < -0.1)
     for (let i = 0; i < pos.count; i++) {
       const vx = pos.getX(i);
       const vz = pos.getZ(i);
       const dist = Math.hypot(vx - center.x, vz - center.z);
-
       if (dist >= radius) continue;
 
-      const falloff = 0.5 * (1 + Math.cos((dist / radius) * Math.PI));
       const curY = pos.getY(i);
+      if (curY <= -0.1) continue; // preserve ponds
 
-      if (curY > 0) {
-        const flattenRate = Math.min(1, strength * 2);
-        const factor = flattenRate * falloff;
-        const newY = THREE.MathUtils.lerp(curY, 0, factor);
-
-        pos.setY(i, newY < 0.035 ? 0 : newY);
-        modified = true;
-      }
+      // Inner 80%: slam straight to 0. Outer 20%: smooth fade.
+      const edgeT = Math.max(0, (dist / radius - 0.8) / 0.2);
+      const targetY = curY * edgeT;
+      pos.setY(i, Math.abs(targetY) < 0.01 ? 0 : targetY);
+      modified = true;
     }
 
     if (modified) {
@@ -973,7 +970,7 @@ export class TerrainManager {
       this.geometry.computeBoundingSphere();
     }
 
-    // 2. Overwrite the diffuse and normal textures inside the brush.
+    // 2. Overwrite texture and normal maps in the circular brush area
     const cp = this.worldToCanvas(center.x, center.z);
     const radiusPx = (radius / this.size) * this.texResolution;
 
@@ -981,70 +978,45 @@ export class TerrainManager {
     const maxX = Math.min(this.texResolution - 1, Math.ceil(cp.x + radiusPx));
     const minY = Math.max(0, Math.floor(cp.y - radiusPx));
     const maxY = Math.min(this.texResolution - 1, Math.ceil(cp.y + radiusPx));
-
     const w = maxX - minX + 1;
     const h = maxY - minY + 1;
-    if (w <= 0 || h <= 0) return;
 
-    const diffuseImg = this.ctx.getImageData(minX, minY, w, h);
-    const normalImg = this.normalCtx.getImageData(minX, minY, w, h);
-    const dData = diffuseImg.data;
-    const nData = normalImg.data;
+    if (w > 0 && h > 0) {
+      const diffuseImg = this.ctx.getImageData(minX, minY, w, h);
+      const normalImg = this.normalCtx.getImageData(minX, minY, w, h);
+      const dData = diffuseImg.data;
+      const nData = normalImg.data;
+      const radPxSq = radiusPx * radiusPx;
 
-    const radPxSq = radiusPx * radiusPx;
+      for (let ly = 0; ly < h; ly++) {
+        const dy = (minY + ly) - cp.y;
+        const dySq = dy * dy;
+        for (let lx = 0; lx < w; lx++) {
+          const dx = (minX + lx) - cp.x;
+          if (dx * dx + dySq > radPxSq) continue;
 
-    // Sand base color
-    const baseR = 232;
-    const baseG = 224;
-    const baseB = 208;
+          const idx = (ly * w + lx) * 4;
+          const grain = (Math.random() - 0.5) * 14;
 
-    // Strength >= 2/3 fully replaces texture at the brush center.
-    const blendRate = Math.min(1, strength * 1.5);
+          // Replace completely with pure pristine sand color + natural subtle grain
+          dData[idx]     = Math.min(255, Math.max(0, 232 + grain));
+          dData[idx + 1] = Math.min(255, Math.max(0, 224 + grain * 0.9));
+          dData[idx + 2] = Math.min(255, Math.max(0, 208 + grain * 0.75));
+          dData[idx + 3] = 255;
 
-    for (let ly = 0; ly < h; ly++) {
-      const gy = minY + ly;
-      const dy = gy - cp.y;
-      const dySq = dy * dy;
-
-      for (let lx = 0; lx < w; lx++) {
-        const dx = minX + lx - cp.x;
-        const distSq = dx * dx + dySq;
-
-        if (distSq >= radPxSq) continue;
-
-        const dist = Math.sqrt(distSq);
-        const falloff = 0.5 * (1 + Math.cos((dist / radiusPx) * Math.PI));
-        const factor = 1;
-
-        const idx = (ly * w + lx) * 4;
-        const grain = (Math.random() - 0.5) * 6;
-
-        dData[idx] = Math.round(
-          dData[idx] * (1 - factor) + (baseR + grain) * factor,
-        );
-        dData[idx + 1] = Math.round(
-          dData[idx + 1] * (1 - factor) + (baseG + grain) * factor,
-        );
-        dData[idx + 2] = Math.round(
-          dData[idx + 2] * (1 - factor) + (baseB + grain) * factor,
-        );
-
-        // Reset the normal map toward flat.
-        nData[idx] = Math.round(nData[idx] * (1 - factor) + 128 * factor);
-        nData[idx + 1] = Math.round(
-          nData[idx + 1] * (1 - factor) + 128 * factor,
-        );
-        nData[idx + 2] = Math.round(
-          nData[idx + 2] * (1 - factor) + 255 * factor,
-        );
+          // Flat tangent normal vector (128, 128, 255)
+          nData[idx]     = 128;
+          nData[idx + 1] = 128;
+          nData[idx + 2] = 255;
+          nData[idx + 3] = 255;
+        }
       }
+
+      this.ctx.putImageData(diffuseImg, minX, minY);
+      this.normalCtx.putImageData(normalImg, minX, minY);
+      this.sandTexture.needsUpdate = true;
+      this.normalTexture.needsUpdate = true;
     }
-
-    this.ctx.putImageData(diffuseImg, minX, minY);
-    this.normalCtx.putImageData(normalImg, minX, minY);
-
-    this.sandTexture.needsUpdate = true;
-    this.normalTexture.needsUpdate = true;
   }
 
   // 6. Carve Water Pool / Pond
