@@ -19,6 +19,8 @@ export class TerrainManager {
       tool: "sculpt-raise", // 'sculpt-raise', 'sculpt-lower', 'smooth', 'rake-sand', 'rake-circle', 'paint-moss', 'paint-grass', 'paint-sand'
       radius: 3.2,
       strength: 0.5,
+      rakeAngle: 0,
+      rakeAngleRad: 0,
     };
 
     // History for Undo/Redo
@@ -420,7 +422,14 @@ export class TerrainManager {
     }
   }
 
-  // Rake sand in parallel vertical lines
+  setRakeAngle(deg) {
+    let d = Math.round(deg) % 180;
+    if (d < 0) d += 180;
+    this.brush.rakeAngle = d;
+    this.brush.rakeAngleRad = (d * Math.PI) / 180;
+  }
+
+  // Rake sand in parallel straight lines at the chosen rakeAngle
   rakeSand(center, radius, strength) {
     const cp = this.worldToCanvas(center.x, center.z);
     const radiusPx = (radius / this.size) * this.texResolution;
@@ -439,7 +448,7 @@ export class TerrainManager {
     const dData = diffuseImg.data;
     const nData = normalImg.data;
 
-    // Line spacing: ~32cm between vertical ridges
+    // Line spacing: ~32cm between ridges
     const lineSpacing = 0.32;
     const freq = (Math.PI * 2) / lineSpacing;
     const radPxSq = radiusPx * radiusPx;
@@ -448,41 +457,18 @@ export class TerrainManager {
     const baseR = 232;
     const baseG = 224;
     const baseB = 208;
+    const blendRate = Math.min(1.0, strength * 0.75);
 
-    // Precalculate target values per column for vertical lines
-    // Subtle, natural contrast (gentle crest brightness & soft furrow shadow)
-    const colR = new Float32Array(w);
-    const colG = new Float32Array(w);
-    const colB = new Float32Array(w);
-    const colNormR = new Uint8Array(w);
-    const colNormB = new Uint8Array(w);
-
-    for (let lx = 0; lx < w; lx++) {
-      const gx = minX + lx;
-      const worldX = (gx / this.texResolution - 0.5) * this.size;
-      const phase = freq * worldX;
-      const wave = Math.sin(phase);
-      const cosWave = Math.cos(phase);
-
-      // Gentle shadow: crest +6, furrow -12 (not harsh black stripes)
-      colR[lx] = baseR + wave * 8;
-      colG[lx] = baseG + wave * 7;
-      colB[lx] = baseB + wave * 6;
-
-      // Subtle natural normal vector slope
-      const nx = -0.55 * cosWave;
-      const nz = 1.0;
-      const invLen = 1.0 / Math.hypot(nx, nz);
-      colNormR[lx] = Math.round((nx * invLen * 0.5 + 0.5) * 255);
-      colNormB[lx] = Math.round((nz * invLen * 0.5 + 0.5) * 255);
-    }
-
-    const blendRate = Math.min(1.0, strength * 0.65);
+    // Direction angle
+    const angle = this.brush.rakeAngleRad || 0;
+    const cosAngle = Math.cos(angle);
+    const sinAngle = Math.sin(angle);
 
     for (let ly = 0; ly < h; ly++) {
       const gy = minY + ly;
       const dy = gy - cp.y;
       const dySq = dy * dy;
+      const worldZ = (gy / this.texResolution - 0.5) * this.size;
 
       for (let lx = 0; lx < w; lx++) {
         const dx = minX + lx - cp.x;
@@ -493,26 +479,47 @@ export class TerrainManager {
           // Protect non-sand terrain: skip green moss/grass, shrubs, wet pond beds
           const pr = dData[idx];
           const pg = dData[idx + 1];
-          const isSand = (pr >= 185 && pr > pg * 0.98);
+          const isSand = pr >= 185 && pr > pg * 0.98;
           if (!isSand) continue;
+
+          const gx = minX + lx;
+          const worldX = (gx / this.texResolution - 0.5) * this.size;
+
+          // Coordinate along direction perpendicular to furrows
+          const d = worldX * cosAngle + worldZ * sinAngle;
+          const phase = freq * d;
+          const wave = Math.sin(phase);
+          const cosWave = Math.cos(phase);
 
           const dist = Math.sqrt(distSq);
           const falloff = 0.5 * (1 + Math.cos((dist / radiusPx) * Math.PI));
           const factor = blendRate * falloff;
           const grain = (Math.random() - 0.5) * 4;
 
-          // Diffuse color blend
-          dData[idx] = dData[idx] + (colR[lx] + grain - dData[idx]) * factor;
-          dData[idx + 1] =
-            dData[idx + 1] + (colG[lx] + grain - dData[idx + 1]) * factor;
-          dData[idx + 2] =
-            dData[idx + 2] + (colB[lx] + grain - dData[idx + 2]) * factor;
+          // Gentle crest & furrow color
+          const targetR = baseR + wave * 8;
+          const targetG = baseG + wave * 7;
+          const targetB = baseB + wave * 6;
 
-          // Normal map blend
-          nData[idx] = nData[idx] + (colNormR[lx] - nData[idx]) * factor;
-          nData[idx + 1] = nData[idx + 1] + (128 - nData[idx + 1]) * factor;
-          nData[idx + 2] =
-            nData[idx + 2] + (colNormB[lx] - nData[idx + 2]) * factor;
+          dData[idx] = dData[idx] + (targetR + grain - dData[idx]) * factor;
+          dData[idx + 1] =
+            dData[idx + 1] + (targetG + grain - dData[idx + 1]) * factor;
+          dData[idx + 2] =
+            dData[idx + 2] + (targetB + grain - dData[idx + 2]) * factor;
+
+          // Normal vector slope along direction (cosAngle, sinAngle)
+          const slope = -0.55 * cosWave;
+          const nx = cosAngle * slope;
+          const nz = sinAngle * slope;
+          const invLen = 1.0 / Math.hypot(nx, nz, 1.0);
+
+          const normR = Math.round((nx * invLen * 0.5 + 0.5) * 255);
+          const normG = Math.round((nz * invLen * 0.5 + 0.5) * 255);
+          const normB = Math.round((1.0 * invLen * 0.5 + 0.5) * 255);
+
+          nData[idx] = nData[idx] + (normR - nData[idx]) * factor;
+          nData[idx + 1] = nData[idx + 1] + (normG - nData[idx + 1]) * factor;
+          nData[idx + 2] = nData[idx + 2] + (normB - nData[idx + 2]) * factor;
         }
       }
     }
@@ -536,11 +543,11 @@ export class TerrainManager {
         if (curY > 0.035 || curY < -0.06) continue; // Don't disturb moss mounds or ponds!
 
         const falloff = 0.5 * (1 + Math.cos((dist / radius) * Math.PI));
-        const targetY =
-          Math.sin(freq * vx) * 0.016 * Math.min(1.0, strength);
+        const d = vx * cosAngle + vz * sinAngle;
+        const targetY = Math.sin(freq * d) * 0.016 * Math.min(1.0, strength);
         pos.setY(
           i,
-          THREE.MathUtils.lerp(curY, targetY, 0.4 * strength * falloff),
+          THREE.MathUtils.lerp(curY, targetY, 0.45 * strength * falloff),
         );
         modified = true;
       }
@@ -595,7 +602,7 @@ export class TerrainManager {
           // Protect non-sand terrain
           const pr = dData[idx];
           const pg = dData[idx + 1];
-          const isSand = (pr >= 185 && pr > pg * 0.98);
+          const isSand = pr >= 185 && pr > pg * 0.98;
           if (!isSand) continue;
 
           const gx = minX + lx;
@@ -659,8 +666,7 @@ export class TerrainManager {
         if (curY > 0.035 || curY < -0.06) continue; // Don't disturb moss mounds or ponds!
 
         const falloff = 0.5 * (1 + Math.cos((dist / radius) * Math.PI));
-        const targetY =
-          Math.sin(freq * dist) * 0.016 * Math.min(1.0, strength);
+        const targetY = Math.sin(freq * dist) * 0.016 * Math.min(1.0, strength);
         pos.setY(
           i,
           THREE.MathUtils.lerp(curY, targetY, 0.45 * strength * falloff),
@@ -1129,23 +1135,23 @@ export class TerrainManager {
       const radPxSq = radiusPx * radiusPx;
 
       for (let ly = 0; ly < h; ly++) {
-        const dy = (minY + ly) - cp.y;
+        const dy = minY + ly - cp.y;
         const dySq = dy * dy;
         for (let lx = 0; lx < w; lx++) {
-          const dx = (minX + lx) - cp.x;
+          const dx = minX + lx - cp.x;
           if (dx * dx + dySq > radPxSq) continue;
 
           const idx = (ly * w + lx) * 4;
           const grain = (Math.random() - 0.5) * 14;
 
           // Replace completely with pure pristine sand color + natural subtle grain
-          dData[idx]     = Math.min(255, Math.max(0, 232 + grain));
+          dData[idx] = Math.min(255, Math.max(0, 232 + grain));
           dData[idx + 1] = Math.min(255, Math.max(0, 224 + grain * 0.9));
           dData[idx + 2] = Math.min(255, Math.max(0, 208 + grain * 0.75));
           dData[idx + 3] = 255;
 
           // Flat tangent normal vector (128, 128, 255)
-          nData[idx]     = 128;
+          nData[idx] = 128;
           nData[idx + 1] = 128;
           nData[idx + 2] = 255;
           nData[idx + 3] = 255;
