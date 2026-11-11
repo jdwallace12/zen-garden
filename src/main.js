@@ -294,6 +294,9 @@ class ZenGardenApp {
       else if (id === 'koi') {
         const initialPos = spawnPos ? spawnPos.clone() : new THREE.Vector3(0, -0.24, 0);
         newObj = decorationGenerator.createKoiFish(initialPos, 3.0 * scale, isAnimated);
+      } else if (id === 'goldfish') {
+        const initialPos = spawnPos ? spawnPos.clone() : new THREE.Vector3(0, -0.24, 0);
+        newObj = decorationGenerator.createGoldfish(initialPos, 2.6 * scale, isAnimated);
       }
     }
     return newObj;
@@ -416,16 +419,17 @@ class ZenGardenApp {
       if (this.ghostPreviewGroup) {
         this.ghostPreviewGroup.visible = true;
 
-        const isKoi = this.selectedElement && this.selectedElement.id === 'koi';
+        const isFish = this.selectedElement && (this.selectedElement.id === 'koi' || this.selectedElement.id === 'goldfish');
+        const fishName = this.selectedElement ? this.selectedElement.name : 'Fish';
         const terrainH = this.terrain.getHeightAt(point.x, point.z);
         const isInWater = terrainH < -0.175;
 
-        if (isKoi) {
+        if (isFish) {
           if (!isInWater) {
-            this.updateHint('⚠️ Hover over water to place Koi Fish (carve a pond first with the Lower or Pool tool).');
+            this.updateHint(`⚠️ Hover over water to place ${fishName} (carve a pond first with the Lower or Pool tool).`);
             if (this.ghostRingMat) this.ghostRingMat.color.setHex(0xef4444);
           } else {
-            this.updateHint('Click in water to place Koi Fish.');
+            this.updateHint(`Click in water to place ${fishName}.`);
             if (this.ghostRingMat) this.ghostRingMat.color.setHex(0x328ea8);
           }
         } else {
@@ -558,7 +562,8 @@ class ZenGardenApp {
         { id: 'bamboo-fence', name: 'Bamboo Fence', desc: 'Kenninji-gaki edging', icon: '🎍', type: 'decoration' },
         { id: 'shishi', name: 'Shishi-Odoshi', desc: 'Ticking bamboo rocker', icon: '🎋', type: 'decoration' },
         { id: 'tsukubai', name: 'Water Basin', desc: 'Chiseled stone basin', icon: '🥣', type: 'decoration' },
-        { id: 'koi', name: 'Koi Fish', desc: 'Swimming Nishikigoi', icon: '🐟', type: 'decoration' }
+        { id: 'koi', name: 'Koi Fish', desc: 'Swimming Nishikigoi', icon: '🐟', type: 'decoration' },
+        { id: 'goldfish', name: 'Goldfish', desc: 'Flowing Kingyo fish', icon: '🐠', type: 'decoration' }
       ]
     };
   }
@@ -1144,7 +1149,7 @@ class ZenGardenApp {
 
   calculateElementPlacementY(point, id, scale = 1.0, rotation = 0) {
     const terrainY = this.terrain.getHeightAt(point.x, point.z);
-    if (id === 'koi') {
+    if (id === 'koi' || id === 'goldfish') {
       return THREE.MathUtils.clamp(-0.24, terrainY + 0.05, -0.19);
     }
     if (id === 'bridge') {
@@ -1170,11 +1175,12 @@ class ZenGardenApp {
     const { category, id, type } = this.selectedElement;
     const scale = this.elementScale;
 
-    // Koi fish placement validation: must be placed in submerged water
-    if (id === 'koi') {
+    // Fish placement validation: must be placed in submerged water
+    if (id === 'koi' || id === 'goldfish') {
       const terrainH = this.terrain.getHeightAt(point.x, point.z);
       if (terrainH >= -0.165) {
-        this.updateHint('⚠️ Koi fish must be placed in water! Carve a pond first with the Lower or Pool tool.');
+        const name = id === 'goldfish' ? 'Goldfish' : 'Koi fish';
+        this.updateHint(`⚠️ ${name} must be placed in water! Carve a pond first with the Lower or Pool tool.`);
         zenAudio.playPlacementThud();
         return;
       }
@@ -1190,11 +1196,12 @@ class ZenGardenApp {
       newObj.position.set(point.x, placeY, point.z);
       newObj.rotation.y = this.elementRotation;
 
-      // Synchronize swimming initial position and home patrol center for koi
-      if (newObj.userData && newObj.userData.koiState) {
-        newObj.userData.koiState.pos.set(point.x, placeY, point.z);
-        newObj.userData.koiState.centerPos.set(point.x, placeY, point.z);
-        newObj.userData.koiState.currentY = placeY;
+      // Synchronize swimming initial position and home patrol center for fish
+      const fishState = newObj.userData && (newObj.userData.koiState || newObj.userData.goldfishState);
+      if (fishState) {
+        fishState.pos.set(point.x, placeY, point.z);
+        fishState.centerPos.set(point.x, placeY, point.z);
+        fishState.currentY = placeY;
       }
 
       this.addPlacedObject(newObj, { category, id, scale, rotation: this.elementRotation });

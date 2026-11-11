@@ -824,6 +824,21 @@ export class GardenPresets {
       });
     });
 
+    const goldfishData = [
+      { pos: new THREE.Vector3(0.5, -0.21, -2.2), r: 2.2, scale: 0.9 },
+      { pos: new THREE.Vector3(3.2, -0.21, 2.0), r: 2.0, scale: 0.85 },
+    ];
+    goldfishData.forEach((g) => {
+      const gf = decorationGenerator.createGoldfish(g.pos, g.r);
+      this.app.addPlacedObject(gf, {
+        category: "traditional",
+        id: "goldfish",
+        scale: g.scale,
+        type: "decoration",
+        subType: "goldfish",
+      });
+    });
+
     // ── 5. Flora & Trees ──────────────────────────────────────────────
     // Splendid Weeping Cherry Blossom (Sakura) bowing over northern pool
     const sakura = treeGenerator.createTree("sakura", 1.45);

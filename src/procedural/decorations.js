@@ -437,6 +437,87 @@ export class DecorationGenerator {
     return tex;
   }
 
+  // Procedural Radiant Japanese Kingyo (Goldfish) Skin Texture
+  createGoldfishTexture() {
+    const size = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    // Rich glowing orange-gold gradient
+    const grad = ctx.createLinearGradient(0, 0, size, size);
+    grad.addColorStop(0.0, '#ff4b1f'); // Deep scarlet gold at dorsal head
+    grad.addColorStop(0.35, '#ff7a18'); // Radiant warm orange body
+    grad.addColorStop(0.7, '#ffaa33'); // Sunlit golden flanks
+    grad.addColorStop(1.0, '#ffd166'); // Shimmering golden peach belly
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+
+    // Warm golden belly glow
+    const bellyGrad = ctx.createRadialGradient(size * 0.45, size * 0.5, 20, size * 0.45, size * 0.5, size * 0.45);
+    bellyGrad.addColorStop(0.0, 'rgba(255, 235, 170, 0.45)');
+    bellyGrad.addColorStop(0.6, 'rgba(255, 180, 50, 0.25)');
+    bellyGrad.addColorStop(1.0, 'rgba(255, 110, 20, 0.0)');
+    ctx.fillStyle = bellyGrad;
+    ctx.fillRect(0, 0, size, size);
+
+    // Golden scale sheen pattern
+    ctx.fillStyle = 'rgba(255, 240, 190, 0.35)';
+    for (let y = 0; y < size; y += 14) {
+      for (let x = 0; x < size; x += 14) {
+        ctx.beginPath();
+        ctx.arc(x + (y % 28 === 0 ? 7 : 0), y, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Rich scarlet highlights on head & dorsal ridge
+    ctx.fillStyle = 'rgba(225, 45, 15, 0.4)';
+    ctx.beginPath();
+    ctx.ellipse(size * 0.25, size * 0.5, 45, 30, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.ellipse(size * 0.52, size * 0.46, 75, 38, 0.08, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Large, cute expressive goldfish eyes with golden ring & specular sparkle
+    const drawEye = (x, y) => {
+      // Golden iris rim
+      ctx.fillStyle = '#f9c74f';
+      ctx.beginPath();
+      ctx.arc(x, y, 9, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pupil
+      ctx.fillStyle = '#0a0a0a';
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Primary eye glint
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(x - 2, y - 2, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Secondary subtle glint
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.beginPath();
+      ctx.arc(x + 1.8, y + 1.8, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+    };
+
+    drawEye(size * 0.16, size * 0.3);
+    drawEye(size * 0.16, size * 0.7);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    return tex;
+  }
+
   // 5. Realistic Living Japanese Koi Fish (Nishikigoi)
   createKoiFish(centerPos = new THREE.Vector3(0, -0.28, 0), radius = 3.5, isAnimated = true) {
     const fishGroup = new THREE.Group();
@@ -753,6 +834,330 @@ export class DecorationGenerator {
           const pecFlap = Math.sin(swimFreq) * 0.22;
           leftPec.rotation.z = -0.3 + pecFlap;
           rightPec.rotation.z = 0.3 - pecFlap;
+        }
+      });
+    }
+
+    return fishGroup;
+  }
+
+  // 6. Charming Japanese Fantail Goldfish (Kingyo - 金魚)
+  createGoldfish(centerPos = new THREE.Vector3(0, -0.26, 0), radius = 2.8, isAnimated = true) {
+    const fishGroup = new THREE.Group();
+    fishGroup.name = 'goldfish';
+
+    const skinTex = this.createGoldfishTexture();
+    const fishMaterial = new THREE.MeshStandardMaterial({
+      map: skinTex,
+      roughness: 0.22,
+      metalness: 0.16,
+      flatShading: false
+    });
+
+    const finMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffe2ba,
+      transparent: true,
+      opacity: 0.72,
+      roughness: 0.32,
+      metalness: 0.08,
+      side: THREE.DoubleSide
+    });
+
+    // --- Spine Segment 1: Rounded Head & Forebody ---
+    const headGroup = new THREE.Group();
+
+    // Plump rounded head (shorter and rounder than koi carp)
+    const headGeo = new THREE.CylinderGeometry(0.19, 0.08, 0.44, 12, 1);
+    headGeo.rotateX(Math.PI / 2);
+    const hPos = headGeo.attributes.position;
+    for (let i = 0; i < hPos.count; i++) {
+      const z = hPos.getZ(i);
+      const x = hPos.getX(i);
+      const y = hPos.getY(i);
+      // Plump rounded cheeks
+      hPos.setX(i, x * 0.95);
+      hPos.setY(i, y * 1.08);
+      // Rounded snout
+      if (z > 0.1) {
+        const t = (z - 0.1) / 0.12;
+        hPos.setY(i, y * (1.0 - t * 0.42));
+        hPos.setX(i, x * (1.0 - t * 0.45));
+      }
+    }
+    headGeo.computeVertexNormals();
+
+    const headMesh = new THREE.Mesh(headGeo, fishMaterial);
+    headMesh.castShadow = true;
+    headGroup.add(headMesh);
+
+    // Pectoral Fins (Fluttering fan fins)
+    const pecGeo = new THREE.PlaneGeometry(0.24, 0.18);
+    pecGeo.rotateX(-Math.PI / 2);
+
+    const leftPec = new THREE.Mesh(pecGeo, finMaterial);
+    leftPec.position.set(0.18, -0.05, 0.06);
+    leftPec.rotation.y = 0.35;
+    leftPec.rotation.z = -0.32;
+    headGroup.add(leftPec);
+
+    const rightPec = new THREE.Mesh(pecGeo, finMaterial);
+    rightPec.position.set(-0.18, -0.05, 0.06);
+    rightPec.rotation.y = -0.35;
+    rightPec.rotation.z = 0.32;
+    headGroup.add(rightPec);
+
+    // --- Spine Segment 2: Plump Mid-Torso & High Veil Dorsal Fin ---
+    const midGroup = new THREE.Group();
+    midGroup.position.set(0, 0, -0.22);
+
+    // Distinctive deep rounded goldfish belly
+    const midGeo = new THREE.CylinderGeometry(0.12, 0.20, 0.42, 12, 1);
+    midGeo.rotateX(Math.PI / 2);
+    const mPos = midGeo.attributes.position;
+    for (let i = 0; i < mPos.count; i++) {
+      const y = mPos.getY(i);
+      // Give characteristic plump lower belly
+      if (y < 0) {
+        mPos.setY(i, y * 1.25);
+      } else {
+        mPos.setY(i, y * 1.12);
+      }
+    }
+    midGeo.computeVertexNormals();
+
+    const midMesh = new THREE.Mesh(midGeo, fishMaterial);
+    midMesh.position.set(0, 0, -0.18);
+    midMesh.castShadow = true;
+    midGroup.add(midMesh);
+
+    // Tall elegant flowing veil dorsal fin
+    const dorsalGeo = new THREE.PlaneGeometry(0.32, 0.22);
+    dorsalGeo.rotateY(Math.PI / 2);
+    const dorsalFin = new THREE.Mesh(dorsalGeo, finMaterial);
+    dorsalFin.position.set(0, 0.23, -0.18);
+    midGroup.add(dorsalFin);
+
+    // Paired small ventral pelvic fins
+    for (const side of [-1, 1]) {
+      const pelvicGeo = new THREE.PlaneGeometry(0.14, 0.09);
+      pelvicGeo.rotateY(Math.PI / 2);
+      const pelvicFin = new THREE.Mesh(pelvicGeo, finMaterial);
+      pelvicFin.position.set(side * 0.07, -0.16, -0.15);
+      pelvicFin.rotation.z = side * 0.25;
+      midGroup.add(pelvicFin);
+    }
+
+    // --- Spine Segment 3: Tail Peduncle ---
+    const tailGroup = new THREE.Group();
+    tailGroup.position.set(0, 0, -0.38);
+
+    const tailGeo = new THREE.CylinderGeometry(0.04, 0.12, 0.32, 10, 1);
+    tailGeo.rotateX(Math.PI / 2);
+    tailGeo.computeVertexNormals();
+
+    const tailMesh = new THREE.Mesh(tailGeo, fishMaterial);
+    tailMesh.position.set(0, 0, -0.14);
+    tailMesh.castShadow = true;
+    tailGroup.add(tailMesh);
+
+    // Ventral anal fin
+    const analGeo = new THREE.PlaneGeometry(0.14, 0.09);
+    analGeo.rotateY(Math.PI / 2);
+    const analFin = new THREE.Mesh(analGeo, finMaterial);
+    analFin.position.set(0, -0.11, -0.12);
+    tailGroup.add(analFin);
+
+    // --- Caudal Tail Fin (Signature Double Flowing Fantail) ---
+    const caudalGroup = new THREE.Group();
+    caudalGroup.position.set(0, 0, -0.28);
+
+    // Two butterfly veil lobes angled gracefully
+    const lobeGeo = new THREE.PlaneGeometry(0.40, 0.38);
+    lobeGeo.rotateY(Math.PI / 2);
+
+    const leftLobe = new THREE.Mesh(lobeGeo, finMaterial);
+    leftLobe.position.set(0.04, 0.02, -0.16);
+    leftLobe.rotation.y = 0.14;
+    leftLobe.rotation.z = -0.08;
+    caudalGroup.add(leftLobe);
+
+    const rightLobe = new THREE.Mesh(lobeGeo, finMaterial);
+    rightLobe.position.set(-0.04, 0.02, -0.16);
+    rightLobe.rotation.y = -0.14;
+    rightLobe.rotation.z = 0.08;
+    caudalGroup.add(rightLobe);
+
+    // Build skeletal hierarchy: Head -> Mid -> Tail -> Caudal Fin
+    tailGroup.add(caudalGroup);
+    midGroup.add(tailGroup);
+    headGroup.add(midGroup);
+    fishGroup.add(headGroup);
+
+    fishGroup.position.copy(centerPos);
+    fishGroup.scale.setScalar(0.85); // Plump, charming goldfish size
+
+    // Autonomous swimming animation with water-boundary awareness
+    if (isAnimated) {
+      const goldfishState = {
+        pos: centerPos.clone(),
+        centerPos: centerPos.clone(),
+        heading: Math.random() * Math.PI * 2,
+        speed: 0.44 + Math.random() * 0.18,
+        wanderTimer: 0.4 + Math.random() * 1.8,
+        targetWanderTurn: 0,
+        patrolRadius: Math.max(1.5, radius),
+        currentY: centerPos.y || -0.24
+      };
+
+      fishGroup.userData.goldfishState = goldfishState;
+
+      this.animatedDecorations.push({
+        type: 'goldfish',
+        mesh: fishGroup,
+        update: (time, dt) => {
+          const tm = this.terrainManager;
+          let steer = 0;
+
+          if (tm) {
+            const SHORE_THRESHOLD = -0.165;
+
+            // Look-ahead feelers to detect pond banks
+            const lookAheadDist = Math.min(0.55, 0.38 * fishGroup.scale.x);
+            const feelerAngle = 0.52;
+
+            const fcX = goldfishState.pos.x + Math.cos(goldfishState.heading) * lookAheadDist;
+            const fcZ = goldfishState.pos.z + Math.sin(goldfishState.heading) * lookAheadDist;
+            const hCenter = tm.getHeightAt(fcX, fcZ);
+
+            const flX = goldfishState.pos.x + Math.cos(goldfishState.heading + feelerAngle) * (lookAheadDist * 0.8);
+            const flZ = goldfishState.pos.z + Math.sin(goldfishState.heading + feelerAngle) * (lookAheadDist * 0.8);
+            const hLeft = tm.getHeightAt(flX, flZ);
+
+            const frX = goldfishState.pos.x + Math.cos(goldfishState.heading - feelerAngle) * (lookAheadDist * 0.8);
+            const frZ = goldfishState.pos.z + Math.sin(goldfishState.heading - feelerAngle) * (lookAheadDist * 0.8);
+            const hRight = tm.getHeightAt(frX, frZ);
+
+            // Steer away from shores
+            if (hCenter >= SHORE_THRESHOLD) {
+              if (hLeft < hRight) {
+                steer = 4.4;
+              } else if (hRight < hLeft) {
+                steer = -4.4;
+              } else {
+                steer = 4.8;
+              }
+            } else if (hLeft >= SHORE_THRESHOLD) {
+              steer = -2.8;
+            } else if (hRight >= SHORE_THRESHOLD) {
+              steer = 2.8;
+            } else {
+              // Safe open water wandering
+              goldfishState.wanderTimer -= dt;
+              if (goldfishState.wanderTimer <= 0) {
+                goldfishState.wanderTimer = 1.2 + Math.random() * 2.2;
+                goldfishState.targetWanderTurn = (Math.random() - 0.5) * 1.5;
+              }
+              steer = goldfishState.targetWanderTurn || 0;
+
+              // Soft home patrol tether
+              const distFromHome = Math.hypot(goldfishState.pos.x - goldfishState.centerPos.x, goldfishState.pos.z - goldfishState.centerPos.z);
+              if (distFromHome > goldfishState.patrolRadius * 1.3) {
+                const toHomeAngle = Math.atan2(goldfishState.centerPos.z - goldfishState.pos.z, goldfishState.centerPos.x - goldfishState.pos.x);
+                let angleDiff = toHomeAngle - goldfishState.heading;
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                steer += angleDiff * 1.4;
+              }
+            }
+
+            // Shoreline gradient push if near bank
+            const currentH = tm.getHeightAt(goldfishState.pos.x, goldfishState.pos.z);
+            if (currentH >= SHORE_THRESHOLD) {
+              const delta = 0.25;
+              const dhdx = tm.getHeightAt(goldfishState.pos.x + delta, goldfishState.pos.z) - tm.getHeightAt(goldfishState.pos.x - delta, goldfishState.pos.z);
+              const dhdz = tm.getHeightAt(goldfishState.pos.x, goldfishState.pos.z + delta) - tm.getHeightAt(goldfishState.pos.x, goldfishState.pos.z - delta);
+              const gradLen = Math.hypot(dhdx, dhdz);
+              if (gradLen > 0.001) {
+                const deepAngle = Math.atan2(-dhdz, -dhdx);
+                let diff = deepAngle - goldfishState.heading;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                steer = diff * 5.0;
+
+                goldfishState.pos.x += (-dhdx / gradLen) * 0.75 * dt;
+                goldfishState.pos.z += (-dhdz / gradLen) * 0.75 * dt;
+              }
+            }
+
+            goldfishState.heading += THREE.MathUtils.clamp(steer, -4.8, 4.8) * dt;
+
+            const nextX = goldfishState.pos.x + Math.cos(goldfishState.heading) * goldfishState.speed * dt;
+            const nextZ = goldfishState.pos.z + Math.sin(goldfishState.heading) * goldfishState.speed * dt;
+            const nextH = tm.getHeightAt(nextX, nextZ);
+
+            if (nextH < SHORE_THRESHOLD) {
+              goldfishState.pos.x = nextX;
+              goldfishState.pos.z = nextZ;
+            } else {
+              const turnDir = (hLeft < hRight) ? 1 : -1;
+              goldfishState.heading += turnDir * (Math.PI * 0.5);
+              const altX = goldfishState.pos.x + Math.cos(goldfishState.heading) * (goldfishState.speed * 0.6) * dt;
+              const altZ = goldfishState.pos.z + Math.sin(goldfishState.heading) * (goldfishState.speed * 0.6) * dt;
+              if (tm.getHeightAt(altX, altZ) < SHORE_THRESHOLD) {
+                goldfishState.pos.x = altX;
+                goldfishState.pos.z = altZ;
+              }
+            }
+
+            const halfBox = (tm.size / 2) - 0.9;
+            goldfishState.pos.x = THREE.MathUtils.clamp(goldfishState.pos.x, -halfBox, halfBox);
+            goldfishState.pos.z = THREE.MathUtils.clamp(goldfishState.pos.z, -halfBox, halfBox);
+
+            const bedH = tm.getHeightAt(goldfishState.pos.x, goldfishState.pos.z);
+            const targetY = THREE.MathUtils.clamp(-0.24, bedH + 0.05, -0.19);
+            goldfishState.currentY = THREE.MathUtils.lerp(goldfishState.currentY, targetY, 4.0 * dt);
+            const swimY = goldfishState.currentY + Math.sin(time * 2.6 + goldfishState.heading) * 0.012;
+
+            fishGroup.position.set(goldfishState.pos.x, swimY, goldfishState.pos.z);
+
+            const vx = Math.cos(goldfishState.heading);
+            const vz = Math.sin(goldfishState.heading);
+            fishGroup.rotation.y = Math.atan2(vx, vz);
+            fishGroup.rotation.z = THREE.MathUtils.clamp(-steer * 0.06, -0.22, 0.22);
+          } else {
+            const currentR = goldfishState.patrolRadius * (0.85 + 0.15 * Math.sin(time * 0.5));
+            goldfishState.heading += (goldfishState.speed / currentR) * dt;
+            fishGroup.position.set(
+              centerPos.x + Math.cos(goldfishState.heading) * currentR,
+              centerPos.y + Math.sin(time * 1.8) * 0.02,
+              centerPos.z + Math.sin(goldfishState.heading) * currentR
+            );
+            fishGroup.rotation.y = Math.atan2(-Math.sin(goldfishState.heading), Math.cos(goldfishState.heading));
+          }
+
+          // Lively goldfish swim flutter (slightly faster, graceful flutter frequency)
+          const swimFreq = time * 5.6 * (goldfishState.speed / 0.44);
+
+          // Head gently sways
+          headMesh.rotation.y = Math.sin(swimFreq) * 0.09;
+
+          // Plump torso flexes
+          midGroup.rotation.y = Math.sin(swimFreq - 0.6) * 0.22;
+
+          // Tail flexes
+          tailGroup.rotation.y = Math.sin(swimFreq - 1.2) * 0.42;
+
+          // Caudal fantail sweep & billow
+          caudalGroup.rotation.y = Math.sin(swimFreq - 1.8) * 0.62;
+          caudalGroup.rotation.z = Math.cos(swimFreq - 1.8) * 0.12;
+
+          // Pectoral fins flutter
+          const pecFlap = Math.sin(swimFreq) * 0.28;
+          leftPec.rotation.z = -0.32 + pecFlap;
+          rightPec.rotation.z = 0.32 - pecFlap;
+
+          // Dorsal fin subtle undulation
+          dorsalFin.rotation.z = Math.sin(swimFreq - 0.8) * 0.12;
         }
       });
     }

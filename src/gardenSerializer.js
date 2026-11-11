@@ -240,6 +240,11 @@ export class GardenSerializer {
             new THREE.Vector3(position.x, position.y, position.z),
             3.0 * scale
           );
+        } else if (id === 'goldfish') {
+          newObj = decorationGenerator.createGoldfish(
+            new THREE.Vector3(position.x, position.y, position.z),
+            2.6 * scale
+          );
         }
       }
 
